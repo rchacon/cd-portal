@@ -372,8 +372,8 @@ function AiSummaryCard({
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-xs text-blue-300/70">
               <span>
-                AI-generated from {name}&rsquo;s votes on the bills below &mdash; it can be wrong or
-                miss context.
+                AI-generated from {name}&rsquo;s recorded votes on this topic &mdash; it can be
+                wrong or miss context.
               </span>
               <button
                 type="button"
