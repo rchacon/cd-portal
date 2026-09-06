@@ -304,7 +304,10 @@ function SummarizeButton({ onClick, disabled }: { onClick: () => void; disabled:
       className="group inline-flex items-center gap-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
     >
       <SparkleIcon className="h-3.5 w-3.5 text-violet-300 drop-shadow-[0_0_6px_rgba(167,139,250,0.75)] transition-transform group-hover:scale-110" />
-      <span className="bg-gradient-to-r from-sky-300 via-violet-300 to-sky-300 bg-[length:200%_auto] bg-clip-text text-transparent motion-safe:animate-shimmer group-hover:from-sky-200 group-hover:via-violet-200 group-hover:to-sky-200">
+      {/* text-sky-200 is the solid fallback; -webkit-text-fill-color only
+          goes transparent where background-clip:text is actually honored,
+          so the label never renders invisible. */}
+      <span className="bg-gradient-to-r from-sky-300 via-violet-300 to-sky-300 bg-[length:200%_auto] bg-clip-text text-sky-200 [-webkit-text-fill-color:transparent] motion-safe:animate-shimmer group-hover:from-sky-200 group-hover:via-violet-200 group-hover:to-sky-200">
         Summarize with AI
       </span>
     </button>
