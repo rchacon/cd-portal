@@ -1,5 +1,15 @@
-import { memo, useMemo, useRef, useState, type ReactNode } from 'react'
-import { searchBills, type Bill, type MemberDetail } from '../lib/cdServer'
+import {
+  Component,
+  lazy,
+  memo,
+  Suspense,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { getIdToken, useAuth } from '../auth/session'
+import { searchBills, summarizeVotingRecord, type Bill, type MemberDetail } from '../lib/cdServer'
 import {
   congressGovBillUrl,
   congressLabel,
@@ -183,12 +193,61 @@ function VoteSearch({ bioguideId, name }: { bioguideId: string; name: string }) 
         </div>
       )}
 
-      {state.kind === 'done' && <Results q={state.q} bills={state.bills} name={name} />}
+      {state.kind === 'done' && (
+        <Results q={state.q} bills={state.bills} name={name} bioguideId={bioguideId} />
+      )}
     </Section>
   )
 }
 
-function Results({ q, bills, name }: { q: string; bills: Bill[]; name: string }) {
+type AiState =
+  | { kind: 'idle' }
+  | { kind: 'need-auth' }
+  | { kind: 'loading' }
+  | { kind: 'error' }
+  | { kind: 'done'; summary: string }
+
+function Results({
+  q,
+  bills,
+  name,
+  bioguideId,
+}: {
+  q: string
+  bills: Bill[]
+  name: string
+  bioguideId: string
+}) {
+  const { login } = useAuth()
+  const [ai, setAi] = useState<AiState>({ kind: 'idle' })
+  // Same stale-response guard as VoteSearch.run -- a Bedrock generation
+  // takes seconds, plenty of time to navigate away first.
+  const requestId = useRef(0)
+
+  function runSummary() {
+    // getIdToken() (not useAuth().displayName) is the real "can I make an
+    // authed call right now" check -- it returns null for an expired
+    // session, where displayName is still set until the refresh timer runs.
+    if (!getIdToken()) {
+      setAi({ kind: 'need-auth' })
+      return
+    }
+    const id = ++requestId.current
+    setAi({ kind: 'loading' })
+    summarizeVotingRecord(bioguideId, q)
+      .then((result) => {
+        if (id === requestId.current) setAi({ kind: 'done', summary: result.summary })
+      })
+      .catch((err: unknown) => {
+        if (id === requestId.current) {
+          // Match VoteSearch's error branch: a static, friendly message
+          // (the raw Bedrock/cd-api text isn't for users) + a log line.
+          console.error('summarizeVotingRecord failed', errorMessage(err))
+          setAi({ kind: 'error' })
+        }
+      })
+  }
+
   if (bills.length === 0) {
     return (
       <div className="mt-6 rounded-xl bg-white/5 px-5 py-8 text-center ring-1 ring-white/10">
@@ -203,12 +262,20 @@ function Results({ q, bills, name }: { q: string; bills: Bill[]; name: string })
 
   return (
     <>
-      <p className="mt-6 text-sm text-blue-100">
-        <span className="font-semibold text-white">
-          {bills.length} {bills.length === 1 ? 'bill' : 'bills'}
-        </span>{' '}
-        related to &ldquo;{q}&rdquo;, closest matches first.
-      </p>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p className="text-sm text-blue-100">
+          <span className="font-semibold text-white">
+            {bills.length} {bills.length === 1 ? 'bill' : 'bills'}
+          </span>{' '}
+          related to &ldquo;{q}&rdquo;, closest matches first.
+        </p>
+        <SummarizeButton onClick={runSummary} disabled={ai.kind === 'loading'} />
+      </div>
+
+      {ai.kind !== 'idle' && (
+        <AiSummaryCard state={ai} name={name} q={q} onRun={runSummary} onSignIn={login} />
+      )}
+
       <ul className="mt-4 space-y-4">
         {bills.map((bill) => (
           <BillResult key={bill.billKey} bill={bill} name={name} />
@@ -219,6 +286,152 @@ function Results({ q, bills, name }: { q: string; bills: Bill[]; name: string })
         of all bills introduced. A narrow topic can return very few, or none.
       </p>
     </>
+  )
+}
+
+function SparkleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M12 2.5l1.9 4.9 4.9 1.9-4.9 1.9L12 16l-1.9-4.8L5.2 9.3l4.9-1.9L12 2.5z" />
+      <path d="M18.5 14l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5z" />
+    </svg>
+  )
+}
+
+// A text link, not a pill -- it sits right under the search Submit button
+// and a second solid button there reads as clutter. The "this is AI"
+// signal is a slow left-to-right colour-flow on the text -- a symmetric
+// sky->violet->sky gradient (no pink, and symmetric so the loop has no
+// visible seam) -- plus a soft glow on the sparkle. Same
+// Apple-Intelligence / Google convention, lighter-weight.
+function SummarizeButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="group inline-flex items-center gap-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <SparkleIcon className="h-3.5 w-3.5 text-violet-300 drop-shadow-[0_0_6px_rgba(167,139,250,0.75)] transition-transform group-hover:scale-110" />
+      {/* text-sky-200 is the solid fallback; -webkit-text-fill-color only
+          goes transparent where background-clip:text is actually honored,
+          so the label never renders invisible. */}
+      <span className="bg-gradient-to-r from-sky-300 via-violet-300 to-sky-300 bg-[length:200%_auto] bg-clip-text text-sky-200 [-webkit-text-fill-color:transparent] motion-safe:animate-shimmer group-hover:from-sky-200 group-hover:via-violet-200 group-hover:to-sky-200">
+        Summarize with AI
+      </span>
+    </button>
+  )
+}
+
+const aiActionClass =
+  'mt-3 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/15 transition-colors hover:bg-white/15'
+
+// react-markdown + remark-gfm (~46 KB gzip) live in their own chunk,
+// fetched only when a summary is actually shown -- it's behind a search,
+// a click, and auth. While that chunk loads (Suspense) or if it fails to
+// load at all (the boundary), we render the summary as pre-line plain
+// text, so the content is never blocked on the parser.
+const SummaryMarkdown = lazy(() => import('./SummaryMarkdown'))
+
+class MarkdownBoundary extends Component<
+  { fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
+
+function AiSummaryCard({
+  state,
+  name,
+  q,
+  onRun,
+  onSignIn,
+}: {
+  state: Exclude<AiState, { kind: 'idle' }>
+  name: string
+  q: string
+  onRun: () => void
+  onSignIn: () => void
+}) {
+  // Shown immediately while the markdown chunk loads, and kept if it
+  // fails to load -- the summary text is never gated on the parser.
+  const plainSummary =
+    state.kind === 'done' ? (
+      <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-blue-50">
+        {state.summary}
+      </p>
+    ) : null
+
+  return (
+    <div className="mt-4 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-violet-400/20 shadow-[0_0_44px_-12px_rgba(139,92,246,0.55),0_0_90px_-28px_rgba(56,189,248,0.4)]">
+      <div className="h-[3px] bg-gradient-to-r from-blue-400 via-violet-400 to-pink-400" />
+      <div className="p-5">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-white/90">
+          <SparkleIcon className="h-4 w-4" />
+          AI summary
+        </div>
+
+        {state.kind === 'loading' && (
+          <p className="mt-3 animate-pulse text-sm text-blue-100">
+            Summarizing {name}&rsquo;s record on &ldquo;{q}&rdquo;&hellip;
+          </p>
+        )}
+
+        {state.kind === 'need-auth' && (
+          <>
+            <p className="mt-3 text-sm text-blue-100">
+              Sign in to generate an AI summary of this voting record.
+            </p>
+            <button type="button" onClick={onSignIn} className={aiActionClass}>
+              Sign in
+            </button>
+          </>
+        )}
+
+        {state.kind === 'error' && (
+          <>
+            <p role="alert" className="mt-3 text-sm text-red-200">
+              We couldn&rsquo;t generate a summary just now &mdash; this is on our side, not your
+              search. Give it a moment and try again.
+            </p>
+            <button type="button" onClick={onRun} className={aiActionClass}>
+              Try again
+            </button>
+          </>
+        )}
+
+        {state.kind === 'done' && (
+          <>
+            <MarkdownBoundary fallback={plainSummary}>
+              <Suspense fallback={plainSummary}>
+                <div className="mt-3">
+                  <SummaryMarkdown>{state.summary}</SummaryMarkdown>
+                </div>
+              </Suspense>
+            </MarkdownBoundary>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-xs text-blue-300/70">
+              <span>
+                AI-generated from {name}&rsquo;s recorded votes on this topic &mdash; it can be
+                wrong or miss context.
+              </span>
+              <button
+                type="button"
+                onClick={onRun}
+                className="font-semibold text-blue-300 underline decoration-blue-300/40 underline-offset-4 hover:text-blue-200"
+              >
+                Regenerate
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 

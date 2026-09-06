@@ -83,6 +83,18 @@ export interface MemberDetail extends Member {
   inOffice: boolean
 }
 
+// `summarizeVotingRecord`: a nonpartisan AI summary of how a member voted
+// on the bills matching a topic (the same bills `searchBills` returns,
+// fed to Bedrock). Auth-gated -- `graphqlRequest` attaches the Cognito id
+// token automatically; an anonymous call comes back as a CdServerError.
+export interface AiSummary {
+  id: string
+  bioguideId: string
+  query: string
+  summary: string
+  createdAt: string
+}
+
 // `searchBills`: bills matching a plain-language topic, each merged with
 // the queried member's roll-call votes on it. A matched bill the member
 // never voted on comes back with `votes: []` -- a distinct, first-class
@@ -157,6 +169,14 @@ const SEARCH_BILLS_QUERY = `
   }
 `
 
+const SUMMARIZE_VOTING_RECORD_MUTATION = `
+  mutation SummarizeVotingRecord($bioguideId: String!, $q: String!) {
+    summarizeVotingRecord(bioguideId: $bioguideId, q: $q) {
+      id bioguideId query summary createdAt
+    }
+  }
+`
+
 export async function getStates(): Promise<StateOption[]> {
   return graphqlRequest<{ getStates: StateOption[] }, 'getStates'>(GET_STATES_QUERY, {}, 'getStates')
 }
@@ -194,5 +214,13 @@ export async function searchBills(bioguideId: string, q: string): Promise<Bill[]
     SEARCH_BILLS_QUERY,
     { bioguideId, q },
     'searchBills',
+  )
+}
+
+export async function summarizeVotingRecord(bioguideId: string, q: string): Promise<AiSummary> {
+  return graphqlRequest<{ summarizeVotingRecord: AiSummary }, 'summarizeVotingRecord'>(
+    SUMMARIZE_VOTING_RECORD_MUTATION,
+    { bioguideId, q },
+    'summarizeVotingRecord',
   )
 }
