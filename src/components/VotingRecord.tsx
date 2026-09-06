@@ -281,11 +281,14 @@ function SparkleIcon({ className }: { className?: string }) {
   )
 }
 
-// A muted warm gold -- distinct from the brand blue and from the bright
-// amber "PRESENT" vote pill (which is amber-500/15 + amber-200). The AI
-// treatment leans darker/golder: dimmer wash, amber-300 label.
+// The button stays in the neutral white-tint family as the result cards.
+// The card itself carries the "this is AI" signal: a thin
+// blue->violet->pink "AI shimmer" strip on top plus a soft violet/blue
+// outer glow so it lifts off the navy background -- the
+// Apple-Intelligence / Google convention, without washing the body in a
+// colour that fights the brand blue.
 const aiPillClass =
-  'inline-flex items-center gap-1.5 rounded-full bg-amber-500/12 px-3.5 py-1.5 text-xs font-semibold text-amber-200 ring-1 ring-amber-400/25 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60'
+  'inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-white ring-1 ring-white/15 transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60'
 
 function SummarizeButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
   return (
@@ -313,60 +316,63 @@ function AiSummaryCard({
   onSignIn: () => void
 }) {
   return (
-    <div className="mt-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-400/5 p-5 ring-1 ring-amber-400/25">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-300">
-        <SparkleIcon className="h-4 w-4" />
-        AI summary
-      </div>
+    <div className="mt-4 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-violet-400/20 shadow-[0_0_44px_-12px_rgba(139,92,246,0.55),0_0_90px_-28px_rgba(56,189,248,0.4)]">
+      <div className="h-[3px] bg-gradient-to-r from-blue-400 via-violet-400 to-pink-400" />
+      <div className="p-5">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-white/90">
+          <SparkleIcon className="h-4 w-4" />
+          AI summary
+        </div>
 
-      {state.kind === 'loading' && (
-        <p className="mt-3 animate-pulse text-sm text-amber-100/90">
-          Summarizing {name}&rsquo;s record on &ldquo;{q}&rdquo;&hellip;
-        </p>
-      )}
-
-      {state.kind === 'need-auth' && (
-        <>
-          <p className="mt-3 text-sm text-amber-100/90">
-            Sign in to generate an AI summary of this voting record.
+        {state.kind === 'loading' && (
+          <p className="mt-3 animate-pulse text-sm text-blue-100">
+            Summarizing {name}&rsquo;s record on &ldquo;{q}&rdquo;&hellip;
           </p>
-          <button type="button" onClick={onSignIn} className={aiActionClass}>
-            Sign in
-          </button>
-        </>
-      )}
+        )}
 
-      {state.kind === 'error' && (
-        <>
-          <p role="alert" className="mt-3 text-sm text-red-200">
-            We couldn&rsquo;t generate a summary just now &mdash; {state.message}
-          </p>
-          <button type="button" onClick={onRun} className={aiActionClass}>
-            Try again
-          </button>
-        </>
-      )}
-
-      {state.kind === 'done' && (
-        <>
-          <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-blue-50">
-            {state.summary}
-          </p>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-amber-400/20 pt-3 text-xs text-amber-300/70">
-            <span>
-              AI-generated from {name}&rsquo;s votes on the bills below &mdash; it can be wrong or
-              miss context.
-            </span>
-            <button
-              type="button"
-              onClick={onRun}
-              className="font-semibold text-amber-200 underline decoration-amber-300/40 underline-offset-4 hover:text-amber-100"
-            >
-              Regenerate
+        {state.kind === 'need-auth' && (
+          <>
+            <p className="mt-3 text-sm text-blue-100">
+              Sign in to generate an AI summary of this voting record.
+            </p>
+            <button type="button" onClick={onSignIn} className={aiActionClass}>
+              Sign in
             </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
+
+        {state.kind === 'error' && (
+          <>
+            <p role="alert" className="mt-3 text-sm text-red-200">
+              We couldn&rsquo;t generate a summary just now &mdash; {state.message}
+            </p>
+            <button type="button" onClick={onRun} className={aiActionClass}>
+              Try again
+            </button>
+          </>
+        )}
+
+        {state.kind === 'done' && (
+          <>
+            <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-blue-50">
+              {state.summary}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-xs text-blue-300/70">
+              <span>
+                AI-generated from {name}&rsquo;s votes on the bills below &mdash; it can be wrong or
+                miss context.
+              </span>
+              <button
+                type="button"
+                onClick={onRun}
+                className="font-semibold text-blue-300 underline decoration-blue-300/40 underline-offset-4 hover:text-blue-200"
+              >
+                Regenerate
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
