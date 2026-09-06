@@ -1,6 +1,13 @@
-import { memo, useMemo, useRef, useState, type ReactNode } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import {
+  Component,
+  lazy,
+  memo,
+  Suspense,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { getIdToken, useAuth } from '../auth/session'
 import { searchBills, summarizeVotingRecord, type Bill, type MemberDetail } from '../lib/cdServer'
 import {
@@ -319,6 +326,26 @@ function SummarizeButton({ onClick, disabled }: { onClick: () => void; disabled:
 const aiActionClass =
   'mt-3 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/15 transition-colors hover:bg-white/15'
 
+// react-markdown + remark-gfm (~48 KB gzip) live in their own chunk,
+// fetched only when a summary is actually shown -- it's behind a search,
+// a click, and auth. While that chunk loads (Suspense) or if it fails to
+// load at all (the boundary), we render the summary as pre-line plain
+// text, so the content is never blocked on the parser.
+const SummaryMarkdown = lazy(() => import('./SummaryMarkdown'))
+
+class MarkdownBoundary extends Component<
+  { fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
+
 function AiSummaryCard({
   state,
   name,
@@ -332,6 +359,15 @@ function AiSummaryCard({
   onRun: () => void
   onSignIn: () => void
 }) {
+  // Shown immediately while the markdown chunk loads, and kept if it
+  // fails to load -- the summary text is never gated on the parser.
+  const plainSummary =
+    state.kind === 'done' ? (
+      <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-blue-50">
+        {state.summary}
+      </p>
+    ) : null
+
   return (
     <div className="mt-4 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-violet-400/20 shadow-[0_0_44px_-12px_rgba(139,92,246,0.55),0_0_90px_-28px_rgba(56,189,248,0.4)]">
       <div className="h-[3px] bg-gradient-to-r from-blue-400 via-violet-400 to-pink-400" />
@@ -372,18 +408,13 @@ function AiSummaryCard({
 
         {state.kind === 'done' && (
           <>
-            <div className="mt-3 space-y-2 text-sm leading-relaxed text-blue-50 [&_a]:text-blue-300 [&_a]:underline [&_a]:decoration-blue-300/40 [&_a]:underline-offset-2 [&_h1]:font-semibold [&_h1]:text-white [&_h2]:font-semibold [&_h2]:text-white [&_h3]:font-semibold [&_h3]:text-white [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5 [&_strong]:font-semibold [&_strong]:text-white [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
-              <Markdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  a: ({ node: _node, ...props }) => (
-                    <a {...props} target="_blank" rel="noreferrer" />
-                  ),
-                }}
-              >
-                {state.summary}
-              </Markdown>
-            </div>
+            <MarkdownBoundary fallback={plainSummary}>
+              <Suspense fallback={plainSummary}>
+                <div className="mt-3">
+                  <SummaryMarkdown>{state.summary}</SummaryMarkdown>
+                </div>
+              </Suspense>
+            </MarkdownBoundary>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-xs text-blue-300/70">
               <span>
                 AI-generated from {name}&rsquo;s recorded votes on this topic &mdash; it can be
