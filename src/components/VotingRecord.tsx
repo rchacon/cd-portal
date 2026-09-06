@@ -1,5 +1,6 @@
 import { memo, useMemo, useRef, useState, type ReactNode } from 'react'
-import { searchBills, type Bill, type MemberDetail } from '../lib/cdServer'
+import { useAuth } from '../auth/session'
+import { searchBills, summarizeVotingRecord, type Bill, type MemberDetail } from '../lib/cdServer'
 import {
   congressGovBillUrl,
   congressLabel,
@@ -183,12 +184,53 @@ function VoteSearch({ bioguideId, name }: { bioguideId: string; name: string }) 
         </div>
       )}
 
-      {state.kind === 'done' && <Results q={state.q} bills={state.bills} name={name} />}
+      {state.kind === 'done' && (
+        <Results q={state.q} bills={state.bills} name={name} bioguideId={bioguideId} />
+      )}
     </Section>
   )
 }
 
-function Results({ q, bills, name }: { q: string; bills: Bill[]; name: string }) {
+type AiState =
+  | { kind: 'idle' }
+  | { kind: 'need-auth' }
+  | { kind: 'loading' }
+  | { kind: 'error'; message: string }
+  | { kind: 'done'; summary: string }
+
+function Results({
+  q,
+  bills,
+  name,
+  bioguideId,
+}: {
+  q: string
+  bills: Bill[]
+  name: string
+  bioguideId: string
+}) {
+  const { displayName, login } = useAuth()
+  const [ai, setAi] = useState<AiState>({ kind: 'idle' })
+  // Same stale-response guard as VoteSearch.run -- a Bedrock generation
+  // takes seconds, plenty of time to navigate away first.
+  const requestId = useRef(0)
+
+  function runSummary() {
+    if (!displayName) {
+      setAi({ kind: 'need-auth' })
+      return
+    }
+    const id = ++requestId.current
+    setAi({ kind: 'loading' })
+    summarizeVotingRecord(bioguideId, q)
+      .then((result) => {
+        if (id === requestId.current) setAi({ kind: 'done', summary: result.summary })
+      })
+      .catch((err: unknown) => {
+        if (id === requestId.current) setAi({ kind: 'error', message: errorMessage(err) })
+      })
+  }
+
   if (bills.length === 0) {
     return (
       <div className="mt-6 rounded-xl bg-white/5 px-5 py-8 text-center ring-1 ring-white/10">
@@ -203,12 +245,20 @@ function Results({ q, bills, name }: { q: string; bills: Bill[]; name: string })
 
   return (
     <>
-      <p className="mt-6 text-sm text-blue-100">
-        <span className="font-semibold text-white">
-          {bills.length} {bills.length === 1 ? 'bill' : 'bills'}
-        </span>{' '}
-        related to &ldquo;{q}&rdquo;, closest matches first.
-      </p>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p className="text-sm text-blue-100">
+          <span className="font-semibold text-white">
+            {bills.length} {bills.length === 1 ? 'bill' : 'bills'}
+          </span>{' '}
+          related to &ldquo;{q}&rdquo;, closest matches first.
+        </p>
+        <SummarizeButton onClick={runSummary} disabled={ai.kind === 'loading'} />
+      </div>
+
+      {ai.kind !== 'idle' && (
+        <AiSummaryCard state={ai} name={name} q={q} onRun={runSummary} onSignIn={login} />
+      )}
+
       <ul className="mt-4 space-y-4">
         {bills.map((bill) => (
           <BillResult key={bill.billKey} bill={bill} name={name} />
@@ -219,6 +269,102 @@ function Results({ q, bills, name }: { q: string; bills: Bill[]; name: string })
         of all bills introduced. A narrow topic can return very few, or none.
       </p>
     </>
+  )
+}
+
+function SparkleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M12 2.5l1.9 4.9 4.9 1.9-4.9 1.9L12 16l-1.9-4.8L5.2 9.3l4.9-1.9L12 2.5z" />
+      <path d="M18.5 14l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1 1-2.5z" />
+    </svg>
+  )
+}
+
+const aiPillClass =
+  'inline-flex items-center gap-1.5 rounded-full bg-violet-500/15 px-3.5 py-1.5 text-xs font-semibold text-violet-200 ring-1 ring-violet-400/30 transition-colors hover:bg-violet-500/25 disabled:cursor-not-allowed disabled:opacity-60'
+
+function SummarizeButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={aiPillClass}>
+      <SparkleIcon className="h-3.5 w-3.5" />
+      Summarize with AI
+    </button>
+  )
+}
+
+const aiActionClass =
+  'mt-3 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/15 transition-colors hover:bg-white/15'
+
+function AiSummaryCard({
+  state,
+  name,
+  q,
+  onRun,
+  onSignIn,
+}: {
+  state: Exclude<AiState, { kind: 'idle' }>
+  name: string
+  q: string
+  onRun: () => void
+  onSignIn: () => void
+}) {
+  return (
+    <div className="mt-4 rounded-2xl bg-gradient-to-br from-violet-500/15 via-violet-500/10 to-indigo-500/10 p-5 ring-1 ring-violet-400/30">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-violet-200">
+        <SparkleIcon className="h-4 w-4" />
+        AI summary
+      </div>
+
+      {state.kind === 'loading' && (
+        <p className="mt-3 animate-pulse text-sm text-violet-100/90">
+          Summarizing {name}&rsquo;s record on &ldquo;{q}&rdquo;&hellip;
+        </p>
+      )}
+
+      {state.kind === 'need-auth' && (
+        <>
+          <p className="mt-3 text-sm text-violet-100/90">
+            Sign in to generate an AI summary of this voting record.
+          </p>
+          <button type="button" onClick={onSignIn} className={aiActionClass}>
+            Sign in
+          </button>
+        </>
+      )}
+
+      {state.kind === 'error' && (
+        <>
+          <p role="alert" className="mt-3 text-sm text-red-200">
+            We couldn&rsquo;t generate a summary just now &mdash; {state.message}
+          </p>
+          <button type="button" onClick={onRun} className={aiActionClass}>
+            Try again
+          </button>
+        </>
+      )}
+
+      {state.kind === 'done' && (
+        <>
+          <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-blue-50">
+            {state.summary}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-violet-400/20 pt-3 text-xs text-violet-300/70">
+            <span>
+              AI-generated from {name}&rsquo;s votes on the bills below &mdash; it can be wrong or
+              miss context.
+            </span>
+            <button
+              type="button"
+              onClick={onRun}
+              className="font-semibold text-violet-200 underline decoration-violet-300/40 underline-offset-4 hover:text-violet-100"
+            >
+              Regenerate
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 

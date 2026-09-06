@@ -7,6 +7,7 @@ import {
   getSenators,
   getMember,
   searchBills,
+  summarizeVotingRecord,
 } from '../../src/lib/cdServer'
 import { getIdToken } from '../../src/auth/session'
 
@@ -353,6 +354,46 @@ describe('searchBills', () => {
 
     await expect(searchBills('O000172', 'immigration')).rejects.toThrow(
       new CdServerError('cd-api request failed: 503'),
+    )
+  })
+})
+
+describe('summarizeVotingRecord', () => {
+  const SUMMARY = {
+    id: 'sum_1',
+    bioguideId: 'O000172',
+    query: 'immigration enforcement',
+    summary: 'The member voted against every enforcement-expansion bill in the set.',
+    createdAt: '2026-09-05T12:00:00Z',
+  }
+
+  it('returns the parsed AI summary on success', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { summarizeVotingRecord: SUMMARY } }),
+    } as Response)
+
+    const result = await summarizeVotingRecord('O000172', 'immigration enforcement')
+
+    expect(result).toEqual(SUMMARY)
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/graphql',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('surfaces an anonymous call (NotAuthenticatedError) as a CdServerError', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        errors: [{ message: 'summarizeVotingRecord requires authentication' }],
+      }),
+    } as Response)
+
+    await expect(summarizeVotingRecord('O000172', 'immigration')).rejects.toThrow(
+      new CdServerError('summarizeVotingRecord requires authentication'),
     )
   })
 })

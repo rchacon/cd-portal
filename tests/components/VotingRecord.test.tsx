@@ -2,14 +2,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { VotingRecord } from '../../src/components/VotingRecord'
-import { CdServerError, searchBills, type Bill, type MemberDetail } from '../../src/lib/cdServer'
+import { useAuth } from '../../src/auth/session'
+import {
+  CdServerError,
+  searchBills,
+  summarizeVotingRecord,
+  type AiSummary,
+  type Bill,
+  type MemberDetail,
+} from '../../src/lib/cdServer'
 
+vi.mock('../../src/auth/session', () => ({ useAuth: vi.fn() }))
 vi.mock('../../src/lib/cdServer', async () => {
   const actual = await vi.importActual<typeof import('../../src/lib/cdServer')>(
     '../../src/lib/cdServer',
   )
-  return { ...actual, searchBills: vi.fn() }
+  return { ...actual, searchBills: vi.fn(), summarizeVotingRecord: vi.fn() }
 })
+
+const LOGGED_IN = { displayName: 'Ada', isLoading: false, login: vi.fn(), logout: vi.fn() }
+const LOGGED_OUT = { displayName: null, isLoading: false, login: vi.fn(), logout: vi.fn() }
 
 const REP: MemberDetail = {
   bioguideId: 'O000172',
@@ -53,6 +65,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(useAuth).mockReturnValue(LOGGED_IN)
 })
 
 describe('role branches', () => {
@@ -234,5 +247,104 @@ describe('expanding a long CRS summary', () => {
     await search(BILL)
 
     expect(screen.queryByRole('button', { name: /show more/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('AI summary', () => {
+  const SUMMARY: AiSummary = {
+    id: 'sum_1',
+    bioguideId: 'O000172',
+    query: 'immigration enforcement',
+    summary: 'Across the matched bills, the member voted against every enforcement-expansion measure.',
+    createdAt: '2026-09-05T12:00:00Z',
+  }
+
+  async function searchThen() {
+    vi.mocked(searchBills).mockResolvedValueOnce([BILL])
+    const user = userEvent.setup()
+    render(<VotingRecord member={REP} />)
+    await user.type(screen.getByRole('textbox'), 'immigration enforcement')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+    await screen.findByText(BILL.title!)
+    return user
+  }
+
+  it('offers a "Summarize with AI" button by the results count line', async () => {
+    await searchThen()
+    expect(screen.getByRole('button', { name: /summarize with ai/i })).toBeInTheDocument()
+  })
+
+  it('generates the summary and renders it in the AI card, then regenerates', async () => {
+    vi.mocked(summarizeVotingRecord).mockResolvedValueOnce(SUMMARY)
+    const user = await searchThen()
+
+    await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
+
+    expect(summarizeVotingRecord).toHaveBeenCalledWith('O000172', 'immigration enforcement')
+    expect(await screen.findByText(SUMMARY.summary)).toBeInTheDocument()
+    expect(screen.getByText(/^AI summary$/i)).toBeInTheDocument()
+
+    vi.mocked(summarizeVotingRecord).mockResolvedValueOnce({
+      ...SUMMARY,
+      summary: 'A fresh take.',
+    })
+    await user.click(screen.getByRole('button', { name: /regenerate/i }))
+
+    expect(summarizeVotingRecord).toHaveBeenCalledTimes(2)
+    expect(await screen.findByText('A fresh take.')).toBeInTheDocument()
+  })
+
+  it('shows a loading state while the summary is generating', async () => {
+    const { promise, resolve } = deferred<AiSummary>()
+    vi.mocked(summarizeVotingRecord).mockReturnValueOnce(promise)
+    const user = await searchThen()
+
+    await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
+
+    expect(screen.getByText(/summarizing/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /summarize with ai/i })).toBeDisabled()
+
+    resolve(SUMMARY)
+    expect(await screen.findByText(SUMMARY.summary)).toBeInTheDocument()
+  })
+
+  it('surfaces a generation failure with a working "Try again"', async () => {
+    vi.mocked(summarizeVotingRecord).mockRejectedValueOnce(
+      new CdServerError('cd-api request failed: 503'),
+    )
+    const user = await searchThen()
+
+    await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/cd-api request failed: 503/i)
+
+    vi.mocked(summarizeVotingRecord).mockResolvedValueOnce(SUMMARY)
+    await user.click(screen.getByRole('button', { name: /try again/i }))
+
+    expect(await screen.findByText(SUMMARY.summary)).toBeInTheDocument()
+  })
+
+  it('prompts a logged-out visitor to sign in instead of calling the mutation', async () => {
+    vi.mocked(useAuth).mockReturnValue(LOGGED_OUT)
+    const user = await searchThen()
+
+    await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
+
+    expect(summarizeVotingRecord).not.toHaveBeenCalled()
+    expect(screen.getByText(/sign in to generate an ai summary/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^sign in$/i }))
+    expect(LOGGED_OUT.login).toHaveBeenCalled()
+  })
+
+  it('does not show the button for a zero-result search', async () => {
+    vi.mocked(searchBills).mockResolvedValueOnce([])
+    const user = userEvent.setup()
+    render(<VotingRecord member={REP} />)
+    await user.type(screen.getByRole('textbox'), 'nothing at all')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+
+    await screen.findByText(/No bills matched/i)
+    expect(screen.queryByRole('button', { name: /summarize with ai/i })).not.toBeInTheDocument()
   })
 })
