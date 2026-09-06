@@ -281,20 +281,24 @@ function SparkleIcon({ className }: { className?: string }) {
   )
 }
 
-// The button stays in the neutral white-tint family as the result cards.
-// The card itself carries the "this is AI" signal: a thin
-// blue->violet->pink "AI shimmer" strip on top plus a soft violet/blue
-// outer glow so it lifts off the navy background -- the
-// Apple-Intelligence / Google convention, without washing the body in a
-// colour that fights the brand blue.
-const aiPillClass =
-  'inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-white ring-1 ring-white/15 transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60'
-
+// A text link, not a pill -- it sits right under the search Submit button
+// and a second solid button there reads as clutter. The "this is AI"
+// signal is a slowly shimmering blue->violet->pink gradient fill on the
+// text (matching the card's top strip) plus a soft glow on the sparkle;
+// the same Apple-Intelligence / Google convention, lighter-weight. The
+// card itself carries a matching shimmer strip + outer glow.
 function SummarizeButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
   return (
-    <button type="button" onClick={onClick} disabled={disabled} className={aiPillClass}>
-      <SparkleIcon className="h-3.5 w-3.5" />
-      Summarize with AI
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="group inline-flex items-center gap-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <SparkleIcon className="h-3.5 w-3.5 text-violet-300 drop-shadow-[0_0_6px_rgba(167,139,250,0.75)] transition-transform group-hover:scale-110" />
+      <span className="bg-gradient-to-r from-pink-300 via-violet-300 to-sky-300 bg-[length:200%_auto] bg-clip-text text-transparent motion-safe:animate-shimmer group-hover:from-pink-200 group-hover:via-violet-200 group-hover:to-sky-200">
+        Summarize with AI
+      </span>
     </button>
   )
 }
