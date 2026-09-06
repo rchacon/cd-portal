@@ -1,4 +1,6 @@
 import { memo, useMemo, useRef, useState, type ReactNode } from 'react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { getIdToken, useAuth } from '../auth/session'
 import { searchBills, summarizeVotingRecord, type Bill, type MemberDetail } from '../lib/cdServer'
 import {
@@ -370,9 +372,18 @@ function AiSummaryCard({
 
         {state.kind === 'done' && (
           <>
-            <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-blue-50">
-              {state.summary}
-            </p>
+            <div className="mt-3 space-y-2 text-sm leading-relaxed text-blue-50 [&_a]:text-blue-300 [&_a]:underline [&_a]:decoration-blue-300/40 [&_a]:underline-offset-2 [&_h1]:font-semibold [&_h1]:text-white [&_h2]:font-semibold [&_h2]:text-white [&_h3]:font-semibold [&_h3]:text-white [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5 [&_strong]:font-semibold [&_strong]:text-white [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
+              <Markdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  a: ({ node: _node, ...props }) => (
+                    <a {...props} target="_blank" rel="noreferrer" />
+                  ),
+                }}
+              >
+                {state.summary}
+              </Markdown>
+            </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-xs text-blue-300/70">
               <span>
                 AI-generated from {name}&rsquo;s recorded votes on this topic &mdash; it can be

@@ -295,6 +295,25 @@ describe('AI summary', () => {
     expect(await screen.findByText('A fresh take.')).toBeInTheDocument()
   })
 
+  it('renders the summary markdown (bold, bullet lists) rather than literal syntax', async () => {
+    vi.mocked(summarizeVotingRecord).mockResolvedValueOnce({
+      ...SUMMARY,
+      summary:
+        'On **substantive votes**, the member voted NAY on:\n\n- H.R. 2056, the DC Compliance Act\n- S. 5, the Laken Riley Act\n\nOne procedural vote went the other way.',
+    })
+    const user = await searchThen()
+
+    await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
+
+    // bold -> <strong>, not literal "**substantive votes**"
+    const strong = await screen.findByText('substantive votes')
+    expect(strong.tagName).toBe('STRONG')
+    expect(screen.queryByText(/\*\*substantive votes\*\*/)).not.toBeInTheDocument()
+    // "- " lines -> real <li>s
+    expect(screen.getByText('H.R. 2056, the DC Compliance Act').tagName).toBe('LI')
+    expect(screen.getByText('S. 5, the Laken Riley Act').tagName).toBe('LI')
+  })
+
   it('shows a loading state while the summary is generating', async () => {
     const { promise, resolve } = deferred<AiSummary>()
     vi.mocked(summarizeVotingRecord).mockReturnValueOnce(promise)
