@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { VotingRecord } from '../../src/components/VotingRecord'
-import { useAuth } from '../../src/auth/session'
+import { getIdToken, useAuth } from '../../src/auth/session'
 import {
   CdServerError,
   searchBills,
@@ -12,7 +12,7 @@ import {
   type MemberDetail,
 } from '../../src/lib/cdServer'
 
-vi.mock('../../src/auth/session', () => ({ useAuth: vi.fn() }))
+vi.mock('../../src/auth/session', () => ({ useAuth: vi.fn(), getIdToken: vi.fn() }))
 vi.mock('../../src/lib/cdServer', async () => {
   const actual = await vi.importActual<typeof import('../../src/lib/cdServer')>(
     '../../src/lib/cdServer',
@@ -66,6 +66,7 @@ function deferred<T>() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(useAuth).mockReturnValue(LOGGED_IN)
+  vi.mocked(getIdToken).mockReturnValue('id-token') // signed in by default
 })
 
 describe('role branches', () => {
@@ -316,7 +317,9 @@ describe('AI summary', () => {
 
     await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/cd-api request failed: 503/i)
+    // Friendly, static -- the raw backend text is logged, not shown.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/this is on our side/i)
+    expect(screen.queryByText(/cd-api request failed/i)).not.toBeInTheDocument()
 
     vi.mocked(summarizeVotingRecord).mockResolvedValueOnce(SUMMARY)
     await user.click(screen.getByRole('button', { name: /try again/i }))
@@ -326,6 +329,7 @@ describe('AI summary', () => {
 
   it('prompts a logged-out visitor to sign in instead of calling the mutation', async () => {
     vi.mocked(useAuth).mockReturnValue(LOGGED_OUT)
+    vi.mocked(getIdToken).mockReturnValue(null)
     const user = await searchThen()
 
     await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
@@ -335,6 +339,19 @@ describe('AI summary', () => {
 
     await user.click(screen.getByRole('button', { name: /^sign in$/i }))
     expect(LOGGED_OUT.login).toHaveBeenCalled()
+  })
+
+  it('shows the sign-in prompt for an expired session (displayName set, token gone)', async () => {
+    // Refresh timer hasn't fired yet: useAuth still reports a name, but
+    // getIdToken() returns null. Gating on the token avoids a doomed call.
+    vi.mocked(useAuth).mockReturnValue(LOGGED_IN)
+    vi.mocked(getIdToken).mockReturnValue(null)
+    const user = await searchThen()
+
+    await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
+
+    expect(summarizeVotingRecord).not.toHaveBeenCalled()
+    expect(screen.getByText(/sign in to generate an ai summary/i)).toBeInTheDocument()
   })
 
   it('does not show the button for a zero-result search', async () => {

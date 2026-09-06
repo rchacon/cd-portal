@@ -1,5 +1,5 @@
 import { memo, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useAuth } from '../auth/session'
+import { getIdToken, useAuth } from '../auth/session'
 import { searchBills, summarizeVotingRecord, type Bill, type MemberDetail } from '../lib/cdServer'
 import {
   congressGovBillUrl,
@@ -195,7 +195,7 @@ type AiState =
   | { kind: 'idle' }
   | { kind: 'need-auth' }
   | { kind: 'loading' }
-  | { kind: 'error'; message: string }
+  | { kind: 'error' }
   | { kind: 'done'; summary: string }
 
 function Results({
@@ -209,14 +209,17 @@ function Results({
   name: string
   bioguideId: string
 }) {
-  const { displayName, login } = useAuth()
+  const { login } = useAuth()
   const [ai, setAi] = useState<AiState>({ kind: 'idle' })
   // Same stale-response guard as VoteSearch.run -- a Bedrock generation
   // takes seconds, plenty of time to navigate away first.
   const requestId = useRef(0)
 
   function runSummary() {
-    if (!displayName) {
+    // getIdToken() (not useAuth().displayName) is the real "can I make an
+    // authed call right now" check -- it returns null for an expired
+    // session, where displayName is still set until the refresh timer runs.
+    if (!getIdToken()) {
       setAi({ kind: 'need-auth' })
       return
     }
@@ -227,7 +230,12 @@ function Results({
         if (id === requestId.current) setAi({ kind: 'done', summary: result.summary })
       })
       .catch((err: unknown) => {
-        if (id === requestId.current) setAi({ kind: 'error', message: errorMessage(err) })
+        if (id === requestId.current) {
+          // Match VoteSearch's error branch: a static, friendly message
+          // (the raw Bedrock/cd-api text isn't for users) + a log line.
+          console.error('summarizeVotingRecord failed', errorMessage(err))
+          setAi({ kind: 'error' })
+        }
       })
   }
 
@@ -348,7 +356,8 @@ function AiSummaryCard({
         {state.kind === 'error' && (
           <>
             <p role="alert" className="mt-3 text-sm text-red-200">
-              We couldn&rsquo;t generate a summary just now &mdash; {state.message}
+              We couldn&rsquo;t generate a summary just now &mdash; this is on our side, not your
+              search. Give it a moment and try again.
             </p>
             <button type="button" onClick={onRun} className={aiActionClass}>
               Try again
