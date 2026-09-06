@@ -281,8 +281,11 @@ function SparkleIcon({ className }: { className?: string }) {
   )
 }
 
+// A muted warm gold -- distinct from the brand blue and from the bright
+// amber "PRESENT" vote pill (which is amber-500/15 + amber-200). The AI
+// treatment leans darker/golder: dimmer wash, amber-300 label.
 const aiPillClass =
-  'inline-flex items-center gap-1.5 rounded-full bg-violet-500/15 px-3.5 py-1.5 text-xs font-semibold text-violet-200 ring-1 ring-violet-400/30 transition-colors hover:bg-violet-500/25 disabled:cursor-not-allowed disabled:opacity-60'
+  'inline-flex items-center gap-1.5 rounded-full bg-amber-500/12 px-3.5 py-1.5 text-xs font-semibold text-amber-200 ring-1 ring-amber-400/25 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60'
 
 function SummarizeButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
   return (
@@ -310,21 +313,21 @@ function AiSummaryCard({
   onSignIn: () => void
 }) {
   return (
-    <div className="mt-4 rounded-2xl bg-gradient-to-br from-violet-500/15 via-violet-500/10 to-indigo-500/10 p-5 ring-1 ring-violet-400/30">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-violet-200">
+    <div className="mt-4 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-400/5 p-5 ring-1 ring-amber-400/25">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-300">
         <SparkleIcon className="h-4 w-4" />
         AI summary
       </div>
 
       {state.kind === 'loading' && (
-        <p className="mt-3 animate-pulse text-sm text-violet-100/90">
+        <p className="mt-3 animate-pulse text-sm text-amber-100/90">
           Summarizing {name}&rsquo;s record on &ldquo;{q}&rdquo;&hellip;
         </p>
       )}
 
       {state.kind === 'need-auth' && (
         <>
-          <p className="mt-3 text-sm text-violet-100/90">
+          <p className="mt-3 text-sm text-amber-100/90">
             Sign in to generate an AI summary of this voting record.
           </p>
           <button type="button" onClick={onSignIn} className={aiActionClass}>
@@ -349,7 +352,7 @@ function AiSummaryCard({
           <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-blue-50">
             {state.summary}
           </p>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-violet-400/20 pt-3 text-xs text-violet-300/70">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-amber-400/20 pt-3 text-xs text-amber-300/70">
             <span>
               AI-generated from {name}&rsquo;s votes on the bills below &mdash; it can be wrong or
               miss context.
@@ -357,7 +360,7 @@ function AiSummaryCard({
             <button
               type="button"
               onClick={onRun}
-              className="font-semibold text-violet-200 underline decoration-violet-300/40 underline-offset-4 hover:text-violet-100"
+              className="font-semibold text-amber-200 underline decoration-amber-300/40 underline-offset-4 hover:text-amber-100"
             >
               Regenerate
             </button>
