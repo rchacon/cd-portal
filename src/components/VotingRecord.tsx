@@ -326,7 +326,7 @@ function SummarizeButton({ onClick, disabled }: { onClick: () => void; disabled:
 const aiActionClass =
   'mt-3 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/15 transition-colors hover:bg-white/15'
 
-// react-markdown + remark-gfm (~48 KB gzip) live in their own chunk,
+// react-markdown + remark-gfm (~46 KB gzip) live in their own chunk,
 // fetched only when a summary is actually shown -- it's behind a search,
 // a click, and auth. While that chunk loads (Suspense) or if it fails to
 // load at all (the boundary), we render the summary as pre-line plain

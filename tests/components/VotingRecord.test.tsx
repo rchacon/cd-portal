@@ -20,6 +20,19 @@ vi.mock('../../src/lib/cdServer', async () => {
   return { ...actual, searchBills: vi.fn(), summarizeVotingRecord: vi.fn() }
 })
 
+// SummaryMarkdown is the lazy-loaded chunk. It renders for real unless a
+// test flips this, which stands in for the chunk failing to load/render.
+let mockMarkdownThrows = false
+vi.mock('../../src/components/SummaryMarkdown', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/components/SummaryMarkdown')>()
+  return {
+    default: (props: { children: string }) => {
+      if (mockMarkdownThrows) throw new Error('markdown chunk failed to load')
+      return <actual.default {...props} />
+    },
+  }
+})
+
 const LOGGED_IN = { displayName: 'Ada', isLoading: false, login: vi.fn(), logout: vi.fn() }
 const LOGGED_OUT = { displayName: null, isLoading: false, login: vi.fn(), logout: vi.fn() }
 
@@ -65,6 +78,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockMarkdownThrows = false
   vi.mocked(useAuth).mockReturnValue(LOGGED_IN)
   vi.mocked(getIdToken).mockReturnValue('id-token') // signed in by default
 })
@@ -312,6 +326,23 @@ describe('AI summary', () => {
     // "- " lines -> real <li>s
     expect(screen.getByText('H.R. 2056, the DC Compliance Act').tagName).toBe('LI')
     expect(screen.getByText('S. 5, the Laken Riley Act').tagName).toBe('LI')
+  })
+
+  it('falls back to the plain-text summary when the markdown chunk fails', async () => {
+    mockMarkdownThrows = true
+    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const md = 'On **substantive votes**, the member voted NAY on every bill.'
+    vi.mocked(summarizeVotingRecord).mockResolvedValueOnce({ ...SUMMARY, summary: md })
+    const user = await searchThen()
+
+    await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
+
+    // The raw string renders verbatim -- ** stays literal, nothing parsed.
+    expect(await screen.findByText(md)).toBeInTheDocument()
+    expect(screen.queryByText('substantive votes')).not.toBeInTheDocument()
+    expect(document.querySelector('strong')).toBeNull()
+
+    consoleErr.mockRestore()
   })
 
   it('shows a loading state while the summary is generating', async () => {

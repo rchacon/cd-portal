@@ -2,7 +2,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 // Default export + its own module so VotingRecord can `lazy()` it -- this
-// pulls react-markdown / remark-gfm (~48 KB gzip) into a separate chunk
+// pulls react-markdown / remark-gfm (~46 KB gzip) into a separate chunk
 // that only loads once someone actually generates a summary.
 
 // Scoped element styling for the dark AI card: bold -> white, links ->
