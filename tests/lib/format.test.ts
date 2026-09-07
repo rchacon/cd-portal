@@ -7,6 +7,7 @@ import {
   formatBillId,
   formatMemberName,
   formatParty,
+  formatResetsAt,
   formatVoteCast,
   formatVoteDate,
   isHttpUrl,
@@ -246,5 +247,28 @@ describe('truncate', () => {
 
   it('cuts to length and appends an ellipsis', () => {
     expect(truncate('one two three four', 7)).toBe('one two…')
+  })
+})
+
+describe('formatResetsAt', () => {
+  const reset = '2026-09-07T00:00:00Z'
+
+  it('shows a local time and a rough countdown', () => {
+    const now = new Date('2026-09-06T18:00:00Z') // 6h before reset
+    expect(formatResetsAt(reset, now)).toMatch(/\(in about 6 hours\)$/)
+  })
+
+  it('uses the singular for one hour', () => {
+    const now = new Date('2026-09-06T23:00:00Z')
+    expect(formatResetsAt(reset, now)).toMatch(/\(in about an hour\)$/)
+  })
+
+  it('says "soon" when the reset time has passed', () => {
+    const now = new Date('2026-09-07T00:30:00Z')
+    expect(formatResetsAt(reset, now)).toMatch(/\(soon\)$/)
+  })
+
+  it('returns the input unchanged for an unparseable value', () => {
+    expect(formatResetsAt('not a date')).toBe('not a date')
   })
 })

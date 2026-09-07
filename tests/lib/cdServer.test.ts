@@ -8,6 +8,7 @@ import {
   getMember,
   searchBills,
   summarizeVotingRecord,
+  getFeatures,
 } from '../../src/lib/cdServer'
 import { getIdToken } from '../../src/auth/session'
 
@@ -394,6 +395,45 @@ describe('summarizeVotingRecord', () => {
 
     await expect(summarizeVotingRecord('O000172', 'immigration')).rejects.toThrow(
       new CdServerError('summarizeVotingRecord requires authentication'),
+    )
+  })
+})
+
+describe('getFeatures', () => {
+  const AI_SUMMARY = {
+    name: 'ai_summary',
+    enabled: true,
+    reason: null,
+    dailyLimit: 10,
+    usedToday: 3,
+    resetsAt: '2026-09-07T00:00:00Z',
+  }
+
+  it('returns the parsed feature list on success', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { features: [AI_SUMMARY] } }),
+    } as Response)
+
+    const result = await getFeatures()
+
+    expect(result).toEqual([AI_SUMMARY])
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/graphql',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('surfaces an anonymous call as a CdServerError', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ errors: [{ message: 'features requires authentication' }] }),
+    } as Response)
+
+    await expect(getFeatures()).rejects.toThrow(
+      new CdServerError('features requires authentication'),
     )
   })
 })
