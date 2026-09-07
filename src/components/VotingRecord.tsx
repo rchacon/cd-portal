@@ -37,6 +37,9 @@ const SUGGESTED_TOPICS = [
   'transgender rights',
 ]
 const SUMMARY_MAX = 280
+// cd-server's summarizeVotingRecord rejects a q over 200 chars; cap the
+// shared topic input so that can't happen after a successful searchBills.
+const TOPIC_MAX = 200
 
 const inputClass =
   'w-full rounded-lg border border-white/20 bg-white px-3 py-2 text-navy-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/50'
@@ -145,6 +148,7 @@ function VoteSearch({ bioguideId, name }: { bioguideId: string; name: string }) 
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="e.g. teaching gender identity in schools"
+          maxLength={TOPIC_MAX}
           disabled={loading}
           className={inputClass}
         />
