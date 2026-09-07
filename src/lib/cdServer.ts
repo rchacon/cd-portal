@@ -95,6 +95,18 @@ export interface AiSummary {
   createdAt: string
 }
 
+// `features`: what the calling user can do right now. v1 returns one
+// entry, `name === "ai_summary"`, carrying its daily-cap state. Auth-gated
+// like the other AI resolvers -- an anonymous call is a CdServerError.
+export interface Feature {
+  name: string
+  enabled: boolean
+  reason: string | null // "daily_limit_reached" | "globally_unavailable" | null
+  dailyLimit: number | null // per-user cap; null when the cap is disabled
+  usedToday: number
+  resetsAt: string // ISO datetime -- next UTC midnight
+}
+
 // `searchBills`: bills matching a plain-language topic, each merged with
 // the queried member's roll-call votes on it. A matched bill the member
 // never voted on comes back with `votes: []` -- a distinct, first-class
@@ -177,6 +189,12 @@ const SUMMARIZE_VOTING_RECORD_MUTATION = `
   }
 `
 
+const FEATURES_QUERY = `
+  query Features {
+    features { name enabled reason dailyLimit usedToday resetsAt }
+  }
+`
+
 export async function getStates(): Promise<StateOption[]> {
   return graphqlRequest<{ getStates: StateOption[] }, 'getStates'>(GET_STATES_QUERY, {}, 'getStates')
 }
@@ -223,4 +241,8 @@ export async function summarizeVotingRecord(bioguideId: string, q: string): Prom
     { bioguideId, q },
     'summarizeVotingRecord',
   )
+}
+
+export async function getFeatures(): Promise<Feature[]> {
+  return graphqlRequest<{ features: Feature[] }, 'features'>(FEATURES_QUERY, {}, 'features')
 }
