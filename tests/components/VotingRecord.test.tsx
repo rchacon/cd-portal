@@ -111,7 +111,10 @@ describe('role branches', () => {
     expect(
       screen.getByRole('heading', { name: /How did Alexandria Ocasio-Cortez vote on/i }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('textbox')).toBeInTheDocument()
+    const input = screen.getByRole('textbox')
+    expect(input).toBeInTheDocument()
+    // cd-server rejects a summarize query over 200 chars; the input caps it.
+    expect(input).toHaveAttribute('maxlength', '200')
   })
 })
 
