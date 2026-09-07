@@ -1,5 +1,44 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
+const menuItemClass =
+  'flex w-full items-center gap-2.5 rounded px-3 py-1.5 text-left text-sm text-blue-100 transition-colors hover:bg-white/10 hover:text-white'
+
+const iconClass = 'h-4 w-4 shrink-0 text-blue-300'
+
+function UsageIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={iconClass}
+    >
+      <path d="M4 20V10M12 20V4M20 20v-7" />
+    </svg>
+  )
+}
+
+function LogOutIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={iconClass}
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+    </svg>
+  )
+}
+
 // First initial(s) of the display name, for the avatar chip.
 function initials(name: string): string {
   return (
@@ -116,8 +155,9 @@ export function UserMenu({
               triggerRef.current?.focus()
               onOpenSettings()
             }}
-            className="block w-full rounded px-3 py-1.5 text-left text-sm text-blue-100 transition-colors hover:bg-white/10 hover:text-white"
+            className={menuItemClass}
           >
+            <UsageIcon />
             Usage
           </button>
           <button
@@ -127,8 +167,9 @@ export function UserMenu({
               setOpen(false)
               onLogout()
             }}
-            className="block w-full rounded px-3 py-1.5 text-left text-sm text-blue-100 transition-colors hover:bg-white/10 hover:text-white"
+            className={menuItemClass}
           >
+            <LogOutIcon />
             Log out
           </button>
         </div>
