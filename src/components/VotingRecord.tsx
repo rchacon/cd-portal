@@ -178,13 +178,14 @@ function Section({ children }: { children: ReactNode }) {
 function VoteSearch({ bioguideId, name }: { bioguideId: string; name: string }) {
   // Seed from ?topic= (restored after the login redirect). If the exact
   // same bioguideId+topic search is still cached, paint it right away;
-  // otherwise the mount effect below re-runs it. Frozen for the life of
-  // the component -- MemberDetailPage is keyed by bioguideId, so a
-  // different member remounts this from scratch.
-  const initialTopic = useMemo(() => readTopicParam(), [])
-  const initialBills = useMemo(
-    () => (initialTopic ? readCachedSearch(bioguideId, initialTopic) : null),
-    [bioguideId, initialTopic],
+  // otherwise the mount effect below re-runs it. Lazy useState, not
+  // useMemo: these must be read exactly once at mount -- a recomputed
+  // useMemo (React treats it as discardable) would re-fire the effect
+  // and clobber an in-flight in-page search. MemberDetailPage is keyed
+  // by bioguideId, so a different member remounts this from scratch.
+  const [initialTopic] = useState(readTopicParam)
+  const [initialBills] = useState<Bill[] | null>(() =>
+    initialTopic ? readCachedSearch(bioguideId, initialTopic) : null,
   )
 
   const [query, setQuery] = useState(initialTopic)
