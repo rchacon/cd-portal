@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
+// First initial(s) of the display name, for the avatar chip.
+function initials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]!.toUpperCase())
+      .join('') || '?'
+  )
+}
+
 // The header username, as a dropdown: "Usage" opens the settings overlay,
 // "Log out" ends the session. Hand-rolled (no menu library, matching the
 // rest of src/): closes on Escape, outside click, or picking an item;
@@ -63,9 +75,15 @@ export function UserMenu({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-white transition-colors hover:bg-white/10"
+        className="inline-flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
       >
-        Hi, {name}
+        <span
+          aria-hidden="true"
+          className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-blue-100 ring-1 ring-white/15"
+        >
+          {initials(name)}
+        </span>
+        {name}
         <svg
           viewBox="0 0 20 20"
           fill="none"

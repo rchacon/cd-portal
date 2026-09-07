@@ -112,7 +112,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /hi, ada/i }))
+    await user.click(screen.getByRole('button', { name: /ada/i }))
     await user.click(screen.getByRole('menuitem', { name: /log out/i }))
 
     expect(logout).toHaveBeenCalled()
@@ -129,7 +129,7 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /hi, ada/i }))
+    await user.click(screen.getByRole('button', { name: /ada/i }))
     await user.click(screen.getByRole('menuitem', { name: /usage/i }))
 
     const dialog = await screen.findByRole('dialog', { name: /settings/i })

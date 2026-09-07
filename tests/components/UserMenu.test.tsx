@@ -13,7 +13,7 @@ function setup() {
 describe('UserMenu', () => {
   it('shows the name and toggles the menu on click', async () => {
     const { user } = setup()
-    const trigger = screen.getByRole('button', { name: /hi, ada/i })
+    const trigger = screen.getByRole('button', { name: /ada/i })
 
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     await user.click(trigger)
@@ -27,7 +27,7 @@ describe('UserMenu', () => {
 
   it('"Usage" calls onOpenSettings and closes the menu', async () => {
     const { user, onOpenSettings } = setup()
-    await user.click(screen.getByRole('button', { name: /hi, ada/i }))
+    await user.click(screen.getByRole('button', { name: /ada/i }))
     await user.click(screen.getByRole('menuitem', { name: 'Usage' }))
 
     expect(onOpenSettings).toHaveBeenCalledTimes(1)
@@ -36,7 +36,7 @@ describe('UserMenu', () => {
 
   it('"Log out" calls onLogout', async () => {
     const { user, onLogout } = setup()
-    await user.click(screen.getByRole('button', { name: /hi, ada/i }))
+    await user.click(screen.getByRole('button', { name: /ada/i }))
     await user.click(screen.getByRole('menuitem', { name: 'Log out' }))
 
     expect(onLogout).toHaveBeenCalledTimes(1)
@@ -44,7 +44,7 @@ describe('UserMenu', () => {
 
   it('closes on Escape and on an outside click', async () => {
     const { user } = setup()
-    const trigger = screen.getByRole('button', { name: /hi, ada/i })
+    const trigger = screen.getByRole('button', { name: /ada/i })
 
     await user.click(trigger)
     await user.keyboard('{Escape}')
