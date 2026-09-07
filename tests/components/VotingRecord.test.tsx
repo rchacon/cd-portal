@@ -305,7 +305,7 @@ describe('AI summary', () => {
 
     expect(summarizeVotingRecord).toHaveBeenCalledWith('O000172', 'immigration enforcement')
     expect(await screen.findByText(SUMMARY.summary)).toBeInTheDocument()
-    expect(screen.getByText(/^AI summary$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^AI Summary$/)).toBeInTheDocument()
 
     vi.mocked(summarizeVotingRecord).mockResolvedValueOnce({
       ...SUMMARY,
@@ -315,6 +315,20 @@ describe('AI summary', () => {
 
     expect(summarizeVotingRecord).toHaveBeenCalledTimes(2)
     expect(await screen.findByText('A fresh take.')).toBeInTheDocument()
+  })
+
+  it('hides the "Summarize with AI" link once the summary is on screen', async () => {
+    vi.mocked(summarizeVotingRecord).mockResolvedValueOnce(SUMMARY)
+    const user = await searchThen()
+
+    expect(screen.getByRole('button', { name: /summarize with ai/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /summarize with ai/i }))
+    await screen.findByText(SUMMARY.summary)
+
+    // The card's own "Regenerate" link is the way to re-run from here.
+    expect(screen.queryByRole('button', { name: /summarize with ai/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /regenerate/i })).toBeInTheDocument()
   })
 
   it('renders the summary markdown (bold, bullet lists) rather than literal syntax', async () => {
