@@ -305,7 +305,7 @@ describe('AI summary', () => {
 
     expect(summarizeVotingRecord).toHaveBeenCalledWith('O000172', 'immigration enforcement')
     expect(await screen.findByText(SUMMARY.summary)).toBeInTheDocument()
-    expect(screen.getByText(/^AI summary$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^AI Summary$/)).toBeInTheDocument()
 
     vi.mocked(summarizeVotingRecord).mockResolvedValueOnce({
       ...SUMMARY,

@@ -481,9 +481,9 @@ function AiSummaryCard({
     <div className="mt-4 overflow-hidden rounded-2xl bg-white/5 ring-1 ring-violet-400/20 shadow-[0_0_44px_-12px_rgba(139,92,246,0.55),0_0_90px_-28px_rgba(56,189,248,0.4)]">
       <div className="h-[3px] bg-gradient-to-r from-blue-400 via-violet-400 to-pink-400" />
       <div className="p-5">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-white/90">
+        <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-white/90">
           <SparkleIcon className="h-4 w-4" />
-          AI summary
+          AI Summary
         </div>
 
         {state.kind === 'loading' && (
