@@ -5,6 +5,7 @@ import { buildLoginUrl, buildLogoutUrl, clientId, redirectUri, tokenEndpoint } f
 const SESSION_KEY = 'cd_auth_session'
 const VERIFIER_KEY = 'cd_pkce_verifier'
 const STATE_KEY = 'cd_oauth_state'
+const RETURN_TO_KEY = 'cd_return_to'
 const REFRESH_LEEWAY_MS = 5 * 60 * 1000
 
 interface StoredSession {
@@ -52,6 +53,35 @@ function saveSession(session: StoredSession) {
 function clearSession() {
   localStorage.removeItem(SESSION_KEY)
   clearTimeout(refreshTimeoutId)
+}
+
+// Stash where the user was before the Cognito redirect, so handleCallback
+// can send them back there rather than always to "/". Skip "/callback"
+// itself (login is never initiated from there, but be safe).
+function rememberReturnPath() {
+  const path = window.location.pathname + window.location.search
+  if (!path.startsWith('/callback')) {
+    sessionStorage.setItem(RETURN_TO_KEY, path)
+  }
+}
+
+// The stashed return path, consumed once. Falls back to "/" unless the
+// value is a safe same-origin absolute path: one leading "/" (not "//" or
+// "/\", which a browser can read as protocol-relative), no whitespace,
+// a sane length, and not the callback route.
+function takeReturnPath(): string {
+  const raw = sessionStorage.getItem(RETURN_TO_KEY)
+  sessionStorage.removeItem(RETURN_TO_KEY)
+  if (
+    raw &&
+    raw.length <= 2048 &&
+    !/\s/.test(raw) &&
+    /^\/(?![/\\])/.test(raw) &&
+    !raw.startsWith('/callback')
+  ) {
+    return raw
+  }
+  return '/'
 }
 
 // No signature verification: the token arrives directly from Cognito over TLS to this
@@ -161,10 +191,11 @@ async function handleCallback() {
   sessionStorage.removeItem(STATE_KEY)
 
   const params = new URLSearchParams(window.location.search)
-  const navigateHome = () => window.history.replaceState(null, '', '/')
+  const returnPath = takeReturnPath()
+  const navigateBack = () => window.history.replaceState(null, '', returnPath)
 
   if (!verifier || !expectedState || params.get('state') !== expectedState || !params.get('code')) {
-    navigateHome()
+    navigateBack()
     notify(loadSession())
     return
   }
@@ -179,7 +210,7 @@ async function handleCallback() {
     console.error('Login failed', err)
     notify(loadSession())
   } finally {
-    navigateHome()
+    navigateBack()
   }
 }
 
@@ -254,6 +285,7 @@ export function useAuth() {
     const state = generateState()
     sessionStorage.setItem(VERIFIER_KEY, verifier)
     sessionStorage.setItem(STATE_KEY, state)
+    rememberReturnPath()
     window.location.href = buildLoginUrl(challenge, state)
   }, [])
 
