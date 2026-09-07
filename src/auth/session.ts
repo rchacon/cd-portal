@@ -192,6 +192,10 @@ async function handleCallback() {
 
   const params = new URLSearchParams(window.location.search)
   const returnPath = takeReturnPath()
+  // Rewrite the URL off /callback *before* notify(): notify re-renders App,
+  // and useRoute reads window.location synchronously during that render
+  // (replaceState fires no popstate, so there's no second chance to
+  // correct it). Every branch below navigates first, then notifies.
   const navigateBack = () => window.history.replaceState(null, '', returnPath)
 
   if (!verifier || !expectedState || params.get('state') !== expectedState || !params.get('code')) {
@@ -205,12 +209,12 @@ async function handleCallback() {
     const session = buildSession(tokens, '')
     saveSession(session)
     scheduleRefresh(session)
+    navigateBack()
     notify(session)
   } catch (err) {
     console.error('Login failed', err)
-    notify(loadSession())
-  } finally {
     navigateBack()
+    notify(loadSession())
   }
 }
 
