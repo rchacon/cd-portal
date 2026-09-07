@@ -81,7 +81,9 @@ export function UsageSection() {
         </p>
       )}
 
-      <p className="mt-3 text-xs text-blue-300/80">Resets {formatResetsAt(f.resetsAt)}</p>
+      <p className="mt-3 text-sm text-blue-100">
+        Resets <span className="font-semibold text-white">{formatResetsAt(f.resetsAt)}</span>
+      </p>
 
       {!f.enabled && (
         <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-200 ring-1 ring-amber-400/25">

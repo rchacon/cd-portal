@@ -31,7 +31,7 @@ describe('UsageSection', () => {
 
     expect(await screen.findByText(/used today/i)).toHaveTextContent('3 of 10 used today')
     expect(screen.getByText(/remaining/i)).toHaveTextContent('7 remaining')
-    expect(screen.getByText(/^Resets /)).toBeInTheDocument()
+    expect(screen.getByText(/^Resets/)).toHaveTextContent(/^Resets .+/)
   })
 
   it('handles a disabled per-user cap (dailyLimit null)', async () => {
