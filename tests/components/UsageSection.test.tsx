@@ -34,11 +34,16 @@ describe('UsageSection', () => {
     expect(screen.getByText(/^Resets/)).toHaveTextContent(/^Resets .+/)
   })
 
-  it('handles a disabled per-user cap (dailyLimit null)', async () => {
-    vi.mocked(getFeatures).mockResolvedValueOnce([{ ...AI_SUMMARY, dailyLimit: null }])
+  it.each([
+    ['null', null],
+    ['0', 0],
+  ])('treats dailyLimit %s as no cap (no bar, no divide-by-zero)', async (_label, dailyLimit) => {
+    vi.mocked(getFeatures).mockResolvedValueOnce([{ ...AI_SUMMARY, dailyLimit }])
     render(<UsageSection />)
 
-    expect(await screen.findByText(/no daily limit/i)).toHaveTextContent('3 used today · no daily limit')
+    expect(await screen.findByText(/no daily limit/i)).toHaveTextContent(
+      '3 used today · no daily limit',
+    )
     expect(screen.queryByText(/remaining/i)).not.toBeInTheDocument()
   })
 
@@ -48,7 +53,7 @@ describe('UsageSection', () => {
     ])
     render(<UsageSection />)
 
-    expect(await screen.findByText(/used all 10 of today's summaries/i)).toBeInTheDocument()
+    expect(await screen.findByText(/used all of today's summaries/i)).toBeInTheDocument()
   })
 
   it('notes when the feature is globally at capacity', async () => {
@@ -58,6 +63,13 @@ describe('UsageSection', () => {
     render(<UsageSection />)
 
     expect(await screen.findByText(/at capacity for everyone/i)).toBeInTheDocument()
+  })
+
+  it('falls back to a generic note for an unrecognised disabled reason', async () => {
+    vi.mocked(getFeatures).mockResolvedValueOnce([{ ...AI_SUMMARY, enabled: false, reason: null }])
+    render(<UsageSection />)
+
+    expect(await screen.findByText(/aren.t available right now/i)).toBeInTheDocument()
   })
 
   it('shows an error with a working "Try again"', async () => {

@@ -74,7 +74,9 @@ function App() {
         &copy; {new Date().getFullYear()} CivicDog. All rights reserved.
       </footer>
 
-      {settingsOpen && <SettingsOverlay onClose={closeSettings} />}
+      {/* displayName-gated so the modal can't outlive the session (an
+          expiry mid-view would otherwise leave it over a logged-out header). */}
+      {settingsOpen && displayName && <SettingsOverlay onClose={closeSettings} />}
     </div>
   )
 }

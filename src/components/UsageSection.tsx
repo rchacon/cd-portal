@@ -53,19 +53,21 @@ export function UsageSection() {
   const f = state.feature
   if (!f) return <p className="text-sm text-blue-100">Usage isn&rsquo;t available right now.</p>
 
-  const capped = f.dailyLimit != null
-  const remaining = capped ? Math.max(0, f.dailyLimit! - f.usedToday) : null
-  const pct = capped ? Math.min(100, (f.usedToday / f.dailyLimit!) * 100) : 0
+  // cd-server sends null for a disabled per-user cap, but treat 0 (or a
+  // stray negative) the same rather than dividing by it for the bar.
+  const limit = f.dailyLimit != null && f.dailyLimit > 0 ? f.dailyLimit : null
+  const remaining = limit != null ? Math.max(0, limit - f.usedToday) : null
+  const pct = limit != null ? Math.min(100, (f.usedToday / limit) * 100) : 0
 
   return (
     <div>
       <h3 className="text-base font-semibold text-white">AI summaries</h3>
 
-      {capped ? (
+      {limit != null ? (
         <>
           <p className="mt-1 text-sm text-blue-100">
             <span className="font-semibold text-white">{f.usedToday}</span> of{' '}
-            <span className="font-semibold text-white">{f.dailyLimit}</span> used today
+            <span className="font-semibold text-white">{limit}</span> used today
           </p>
           <div className="mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-white/10">
             <div className="h-full rounded-full bg-blue-400" style={{ width: `${pct}%` }} />
@@ -89,7 +91,9 @@ export function UsageSection() {
         <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-200 ring-1 ring-amber-400/25">
           {f.reason === 'globally_unavailable'
             ? 'AI summaries are at capacity for everyone right now.'
-            : `You've used all ${f.dailyLimit ?? ''} of today's summaries.`}
+            : f.reason === 'daily_limit_reached'
+              ? "You've used all of today's summaries."
+              : 'AI summaries aren’t available right now.'}
         </p>
       )}
     </div>
