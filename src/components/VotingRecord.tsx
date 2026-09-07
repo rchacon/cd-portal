@@ -374,7 +374,11 @@ function Results({
           </span>{' '}
           related to &ldquo;{q}&rdquo;, closest matches first.
         </p>
-        <SummarizeButton onClick={runSummary} disabled={ai.kind === 'loading'} />
+        {/* Once the summary is on screen, the AI card carries its own
+            "Regenerate" link -- a second trigger up here is just noise. */}
+        {ai.kind !== 'done' && (
+          <SummarizeButton onClick={runSummary} disabled={ai.kind === 'loading'} />
+        )}
       </div>
 
       {ai.kind !== 'idle' && (
