@@ -191,3 +191,16 @@ export function plainTextBlocks(html: string): string[] {
   const whole = (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim()
   return whole ? [whole] : []
 }
+
+// "2026-09-06T00:00:00Z" -> "12:00 AM (in about 6 hours)". The daily
+// AI-summary cap resets at the next UTC midnight; show it as a local
+// time plus a rough countdown. `now` is injectable for tests.
+export function formatResetsAt(iso: string, now: Date = new Date()): string {
+  const reset = new Date(iso)
+  if (Number.isNaN(reset.getTime())) return iso
+  const time = reset.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  const hours = Math.round((reset.getTime() - now.getTime()) / 3_600_000)
+  if (hours <= 0) return `${time} (soon)`
+  if (hours === 1) return `${time} (in about an hour)`
+  return `${time} (in about ${hours} hours)`
+}
