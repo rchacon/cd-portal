@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 const SESSION_KEY = 'cd_auth_session'
 const VERIFIER_KEY = 'cd_pkce_verifier'
 const STATE_KEY = 'cd_oauth_state'
+const RETURN_TO_KEY = 'cd_return_to'
 
 function base64UrlEncodeJson(obj: unknown): string {
   const bytes = new TextEncoder().encode(JSON.stringify(obj))
@@ -181,6 +182,64 @@ describe('handleCallback', () => {
     const stored = JSON.parse(localStorage.getItem(SESSION_KEY)!)
     expect(stored.accessToken).toBe('at-1')
   })
+
+  it('returns to the stashed path after a successful exchange, then clears it', async () => {
+    window.history.replaceState(null, '', '/callback?code=abc123&state=xyz789')
+    sessionStorage.setItem(VERIFIER_KEY, 'verifier-1')
+    sessionStorage.setItem(STATE_KEY, 'xyz789')
+    sessionStorage.setItem(RETURN_TO_KEY, '/member/K000401?tab=votes')
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        access_token: 'at-1',
+        id_token: makeJwt({ given_name: 'Ada' }),
+        expires_in: 3600,
+        refresh_token: 'rt-1',
+      }),
+    } as Response)
+
+    const { useAuth } = await import('../../src/auth/session')
+    function Probe() {
+      const { displayName } = useAuth()
+      return <div data-testid="name">{displayName ?? 'none'}</div>
+    }
+    render(<Probe />)
+
+    await waitFor(() => expect(screen.getByTestId('name')).toHaveTextContent('Ada'))
+    expect(window.location.pathname + window.location.search).toBe('/member/K000401?tab=votes')
+    expect(sessionStorage.getItem(RETURN_TO_KEY)).toBeNull()
+  })
+
+  it.each(['//evil.example.com', 'https://evil.example.com', '/\\evil', 'not-a-path'])(
+    'ignores an unsafe stashed return path (%s) and goes home',
+    async (bad) => {
+      window.history.replaceState(null, '', '/callback?code=abc123&state=xyz789')
+      sessionStorage.setItem(VERIFIER_KEY, 'verifier-1')
+      sessionStorage.setItem(STATE_KEY, 'xyz789')
+      sessionStorage.setItem(RETURN_TO_KEY, bad)
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          access_token: 'at-1',
+          id_token: makeJwt({ given_name: 'Ada' }),
+          expires_in: 3600,
+          refresh_token: 'rt-1',
+        }),
+      } as Response)
+
+      const { useAuth } = await import('../../src/auth/session')
+      function Probe() {
+        const { displayName } = useAuth()
+        return <div data-testid="name">{displayName ?? 'none'}</div>
+      }
+      render(<Probe />)
+
+      await waitFor(() => expect(screen.getByTestId('name')).toHaveTextContent('Ada'))
+      expect(window.location.pathname).toBe('/')
+    },
+  )
 
   it('falls back to any stored session when state is missing or mismatched', async () => {
     window.history.replaceState(null, '', '/callback?code=abc123&state=wrong')
@@ -415,6 +474,27 @@ describe('login', () => {
     expect(verifier).toBeTruthy()
     expect(state).toBeTruthy()
     expect(buildLoginUrl).toHaveBeenCalledWith(expect.any(String), state)
+  })
+
+  it('stashes the current path so login can return to it', async () => {
+    window.history.replaceState(null, '', '/member/K000401?tab=votes')
+    const user = userEvent.setup()
+    const { useAuth } = await import('../../src/auth/session')
+    function Probe() {
+      const { login } = useAuth()
+      return (
+        <button type="button" onClick={() => void login()}>
+          login
+        </button>
+      )
+    }
+    render(<Probe />)
+
+    await user.click(screen.getByRole('button', { name: 'login' }))
+
+    await waitFor(() =>
+      expect(sessionStorage.getItem(RETURN_TO_KEY)).toBe('/member/K000401?tab=votes'),
+    )
   })
 })
 

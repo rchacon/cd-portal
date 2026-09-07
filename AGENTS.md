@@ -30,7 +30,10 @@ route of its own: `parseRoute` doesn't match it, so it falls through to
 the home screen and `LookupForm` renders (firing `getStates()`) during
 the OAuth code exchange — same as before this app had a router.
 `src/auth/session.ts` then handles the exchange and `history.replaceState`s
-back to `/`. Reach for `react-router` only if a third screen with nested
+back to wherever the user started login from — `login()` stashes
+`pathname + search` in `sessionStorage` (`cd_return_to`) and
+`handleCallback()` restores it (validated same-origin absolute path, `/`
+fallback). Reach for `react-router` only if a third screen with nested
 routes / real URL params shows up.
 
 Cognito infra (User Pool, the `cd-webapp-dev`/`cd-webapp-prod` app

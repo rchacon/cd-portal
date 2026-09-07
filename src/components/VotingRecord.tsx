@@ -3,6 +3,8 @@ import {
   lazy,
   memo,
   Suspense,
+  useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -10,6 +12,7 @@ import {
 } from 'react'
 import { getIdToken, useAuth } from '../auth/session'
 import { searchBills, summarizeVotingRecord, type Bill, type MemberDetail } from '../lib/cdServer'
+import { memberPath } from '../lib/router'
 import {
   congressGovBillUrl,
   congressLabel,
@@ -47,6 +50,74 @@ const submitButtonClass =
   'shrink-0 rounded-full bg-blue-500 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60'
 const chipClass =
   'rounded-full bg-white/10 px-3 py-1 text-xs text-blue-100 ring-1 ring-white/15 transition-colors hover:bg-white/15'
+
+// The completed topic search is round-tripped through the Cognito login
+// redirect (which blows away all React state) two ways:
+//
+//  - ?topic= in the URL. login() stashes pathname+search as cd_return_to
+//    and handleCallback restores it (src/auth/session.ts), so the topic
+//    comes back for free. parseRoute ignores the query string, so this
+//    never trips a route change.
+//  - The result list in sessionStorage, keyed by bioguideId+topic. Lets
+//    the page paint the same bills immediately on return instead of
+//    re-running searchBills. sessionStorage (not localStorage): tab-
+//    scoped and cleared when the tab closes, so a stale list can't
+//    outlive the browsing session. The ?topic= param is the source of
+//    truth -- a cache miss (different member, evicted, private mode)
+//    just falls back to a re-fetch.
+const TOPIC_PARAM = 'topic'
+const SEARCH_CACHE_KEY = 'cd_voterecord_search'
+
+type CachedSearch = { bioguideId: string; q: string; bills: Bill[] }
+
+function readTopicParam(): string {
+  try {
+    const raw = new URLSearchParams(window.location.search).get(TOPIC_PARAM) ?? ''
+    return raw.trim().slice(0, TOPIC_MAX)
+  } catch {
+    return ''
+  }
+}
+
+// Reflect the completed search into the URL via replaceState -- not the
+// router's navigate(), which would push a history entry per search and
+// scroll to the top. Passing '' clears the param.
+function syncTopicParam(bioguideId: string, q: string): void {
+  const base = memberPath(bioguideId)
+  const url = q ? `${base}?${TOPIC_PARAM}=${encodeURIComponent(q)}` : base
+  window.history.replaceState(null, '', url)
+}
+
+function readCachedSearch(bioguideId: string, q: string): Bill[] | null {
+  try {
+    const raw = sessionStorage.getItem(SEARCH_CACHE_KEY)
+    if (!raw) return null
+    const cached = JSON.parse(raw) as CachedSearch
+    if (cached.bioguideId === bioguideId && cached.q === q && Array.isArray(cached.bills)) {
+      return cached.bills
+    }
+  } catch {
+    // Malformed JSON, or a privacy mode that throws on read -- treat as a miss.
+  }
+  return null
+}
+
+function writeCachedSearch(entry: CachedSearch): void {
+  try {
+    sessionStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(entry))
+  } catch {
+    // Quota, or a privacy mode that throws on write -- the ?topic= param
+    // still drives a re-fetch on return, so the cache is best-effort.
+  }
+}
+
+function clearCachedSearch(): void {
+  try {
+    sessionStorage.removeItem(SEARCH_CACHE_KEY)
+  } catch {
+    // Ignore -- see writeCachedSearch.
+  }
+}
 
 type SearchState =
   | { kind: 'idle' }
@@ -105,27 +176,57 @@ function Section({ children }: { children: ReactNode }) {
 }
 
 function VoteSearch({ bioguideId, name }: { bioguideId: string; name: string }) {
-  const [query, setQuery] = useState('')
-  const [state, setState] = useState<SearchState>({ kind: 'idle' })
+  // Seed from ?topic= (restored after the login redirect). If the exact
+  // same bioguideId+topic search is still cached, paint it right away;
+  // otherwise the mount effect below re-runs it. Lazy useState, not
+  // useMemo: these must be read exactly once at mount -- a recomputed
+  // useMemo (React treats it as discardable) would re-fire the effect
+  // and clobber an in-flight in-page search. MemberDetailPage is keyed
+  // by bioguideId, so a different member remounts this from scratch.
+  const [initialTopic] = useState(readTopicParam)
+  const [initialBills] = useState<Bill[] | null>(() =>
+    initialTopic ? readCachedSearch(bioguideId, initialTopic) : null,
+  )
+
+  const [query, setQuery] = useState(initialTopic)
+  const [state, setState] = useState<SearchState>(
+    initialBills ? { kind: 'done', q: initialTopic, bills: initialBills } : { kind: 'idle' },
+  )
   // Ignore a resolved/rejected search once a newer one has been kicked off.
   const requestId = useRef(0)
 
-  function run(raw: string) {
-    const q = raw.trim()
-    if (!q) return
-    const id = ++requestId.current
-    setState({ kind: 'loading', q })
-    searchBills(bioguideId, q)
-      .then((bills) => {
-        if (id === requestId.current) setState({ kind: 'done', q, bills })
-      })
-      .catch((err: unknown) => {
-        if (id === requestId.current) {
+  const run = useCallback(
+    (raw: string) => {
+      const q = raw.trim().slice(0, TOPIC_MAX)
+      if (!q) return
+      const id = ++requestId.current
+      setState({ kind: 'loading', q })
+      // Stale bills must never be served for the new query; the URL param
+      // is left until this search resolves (nothing can act on it mid-
+      // flight -- the summarize button only exists on a done result).
+      clearCachedSearch()
+      searchBills(bioguideId, q)
+        .then((bills) => {
+          if (id !== requestId.current) return
+          setState({ kind: 'done', q, bills })
+          syncTopicParam(bioguideId, q)
+          writeCachedSearch({ bioguideId, q, bills })
+        })
+        .catch((err: unknown) => {
+          if (id !== requestId.current) return
           console.error('searchBills failed', errorMessage(err))
           setState({ kind: 'error', q })
-        }
-      })
-  }
+          syncTopicParam(bioguideId, '')
+        })
+    },
+    [bioguideId],
+  )
+
+  // A topic came back in the URL but nothing was cached to show for it --
+  // re-run the search. Effectively mount-only: the deps are frozen (see above).
+  useEffect(() => {
+    if (initialTopic && !initialBills) run(initialTopic)
+  }, [initialTopic, initialBills, run])
 
   const loading = state.kind === 'loading'
 

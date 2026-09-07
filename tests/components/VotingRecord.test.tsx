@@ -81,6 +81,11 @@ beforeEach(() => {
   mockMarkdownThrows = false
   vi.mocked(useAuth).mockReturnValue(LOGGED_IN)
   vi.mocked(getIdToken).mockReturnValue('id-token') // signed in by default
+  // A completed search writes ?topic= to the URL and caches its results
+  // in sessionStorage; clear both so one test's search can't rehydrate
+  // into the next test's fresh render.
+  sessionStorage.clear()
+  window.history.replaceState(null, '', '/')
 })
 
 describe('role branches', () => {
@@ -416,5 +421,81 @@ describe('AI summary', () => {
 
     await screen.findByText(/No bills matched/i)
     expect(screen.queryByRole('button', { name: /summarize with ai/i })).not.toBeInTheDocument()
+  })
+})
+
+// The completed search survives the Cognito login redirect: the topic
+// goes into ?topic= (carried back by src/auth/session.ts) and the result
+// list is cached in sessionStorage keyed by bioguideId+topic.
+describe('search state round-trips through a full-page redirect', () => {
+  const CACHE_KEY = 'cd_voterecord_search'
+  const topicParam = () => new URLSearchParams(window.location.search).get('topic')
+
+  it('reflects a completed search into the URL and sessionStorage', async () => {
+    vi.mocked(searchBills).mockResolvedValueOnce([BILL])
+    const user = userEvent.setup()
+    render(<VotingRecord member={REP} />)
+
+    await user.type(screen.getByRole('textbox'), 'immigration enforcement')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+    await screen.findByText(BILL.title!)
+
+    expect(topicParam()).toBe('immigration enforcement')
+    expect(JSON.parse(sessionStorage.getItem(CACHE_KEY)!)).toEqual({
+      bioguideId: 'O000172',
+      q: 'immigration enforcement',
+      bills: [BILL],
+    })
+  })
+
+  it('paints the cached results on mount without re-running the search', async () => {
+    window.history.replaceState(null, '', '/member/O000172?topic=immigration%20enforcement')
+    sessionStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ bioguideId: 'O000172', q: 'immigration enforcement', bills: [BILL] }),
+    )
+
+    render(<VotingRecord member={REP} />)
+
+    expect(await screen.findByText(BILL.title!)).toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toHaveValue('immigration enforcement')
+    expect(searchBills).not.toHaveBeenCalled()
+  })
+
+  it('re-runs the search from ?topic= when nothing is cached for it', async () => {
+    window.history.replaceState(null, '', '/member/O000172?topic=border%20security')
+    vi.mocked(searchBills).mockResolvedValueOnce([BILL])
+
+    render(<VotingRecord member={REP} />)
+
+    expect(await screen.findByText(BILL.title!)).toBeInTheDocument()
+    expect(searchBills).toHaveBeenCalledWith('O000172', 'border security')
+  })
+
+  it('ignores a cache left by a different member', async () => {
+    window.history.replaceState(null, '', '/member/O000172?topic=border%20security')
+    sessionStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ bioguideId: 'X999999', q: 'border security', bills: [BILL] }),
+    )
+    vi.mocked(searchBills).mockResolvedValueOnce([BILL])
+
+    render(<VotingRecord member={REP} />)
+
+    await screen.findByText(BILL.title!)
+    expect(searchBills).toHaveBeenCalledWith('O000172', 'border security')
+  })
+
+  it('clears the topic param when the search fails', async () => {
+    vi.mocked(searchBills).mockRejectedValueOnce(new CdServerError('cd-api request failed: 503'))
+    const user = userEvent.setup()
+    render(<VotingRecord member={REP} />)
+
+    await user.type(screen.getByRole('textbox'), 'immigration')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+
+    await screen.findByRole('alert')
+    expect(topicParam()).toBeNull()
+    expect(sessionStorage.getItem(CACHE_KEY)).toBeNull()
   })
 })
