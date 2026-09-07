@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { UsageIcon } from './icons'
 import { UsageSection } from './UsageSection'
 
 // One nav item today; add an entry to grow the left rail.
-const SECTIONS = [{ id: 'usage', label: 'Usage', Component: UsageSection }] as const
+const SECTIONS = [
+  { id: 'usage', label: 'Usage', Icon: UsageIcon, Component: UsageSection },
+] as const
 type SectionId = (typeof SECTIONS)[number]['id']
 
 const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -92,12 +95,13 @@ export function SettingsOverlay({ onClose }: { onClose: () => void }) {
                 type="button"
                 onClick={() => setActiveId(s.id)}
                 aria-current={s.id === activeId ? 'page' : undefined}
-                className={`block w-full rounded px-3 py-1.5 text-left text-sm transition-colors ${
+                className={`flex w-full items-center gap-2.5 rounded px-3 py-1.5 text-left text-sm transition-colors ${
                   s.id === activeId
                     ? 'bg-white/10 font-medium text-white'
                     : 'text-blue-200 hover:bg-white/5 hover:text-white'
                 }`}
               >
+                <s.Icon className="h-4 w-4 shrink-0" />
                 {s.label}
               </button>
             ))}
