@@ -3,7 +3,7 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../src/App'
 import { useAuth } from '../src/auth/session'
-import { getMember, getSenators, getStates } from '../src/lib/cdServer'
+import { getFeatures, getMember, getSenators, getStates } from '../src/lib/cdServer'
 
 vi.mock('../src/auth/session', () => ({ useAuth: vi.fn() }))
 vi.mock('../src/lib/cdServer', async () => {
@@ -13,6 +13,7 @@ vi.mock('../src/lib/cdServer', async () => {
     getStates: vi.fn().mockResolvedValue([]),
     getSenators: vi.fn(),
     getMember: vi.fn(),
+    getFeatures: vi.fn().mockResolvedValue([]),
   }
 })
 
@@ -100,7 +101,7 @@ describe('App', () => {
     expect(login).toHaveBeenCalled()
   })
 
-  it('shows a greeting and logout button when logged in, which calls logout on click', async () => {
+  it('shows a greeting and, via the user menu, a logout that calls logout', async () => {
     const logout = vi.fn()
     vi.mocked(useAuth).mockReturnValue({
       displayName: 'Ada',
@@ -111,10 +112,32 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByText('Hi, Ada')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /log out/i }))
+    await user.click(screen.getByRole('button', { name: /hi, ada/i }))
+    await user.click(screen.getByRole('menuitem', { name: /log out/i }))
 
     expect(logout).toHaveBeenCalled()
+  })
+
+  it('opens the settings overlay from the user menu, and closes it', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      displayName: 'Ada',
+      isLoading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+    })
+    vi.mocked(getFeatures).mockResolvedValue([])
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /hi, ada/i }))
+    await user.click(screen.getByRole('menuitem', { name: /usage/i }))
+
+    const dialog = await screen.findByRole('dialog', { name: /settings/i })
+    expect(dialog).toBeInTheDocument()
+    expect(getFeatures).toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /close settings/i }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('renders the copyright footer with the current year', () => {

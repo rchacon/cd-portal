@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './auth/session'
 import { LookupForm } from './components/LookupForm'
 import { MemberDetailPage } from './components/MemberDetailPage'
+import { SettingsOverlay } from './components/SettingsOverlay'
+import { UserMenu } from './components/UserMenu'
 import { useRoute } from './lib/router'
 
 function App() {
   const { displayName, isLoading, login, logout } = useAuth()
   const route = useRoute()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const closeSettings = useCallback(() => setSettingsOpen(false), [])
   // Mount LookupForm lazily, on the first visit to / -- then keep it
   // mounted (hidden) from then on, so a later trip to a member and back
   // preserves it. A cold load straight at /member/:bioguideId (a shared
@@ -39,19 +43,11 @@ function App() {
 
         {!isLoading &&
           (displayName ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-white">Hi, {displayName}</span>
-              <span className="text-blue-300/50" aria-hidden="true">
-                ·
-              </span>
-              <button
-                type="button"
-                onClick={logout}
-                className="text-sm font-medium text-blue-300 underline decoration-blue-300/40 underline-offset-4 transition-colors hover:text-blue-200"
-              >
-                Log out
-              </button>
-            </div>
+            <UserMenu
+              name={displayName}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onLogout={logout}
+            />
           ) : (
             <button
               type="button"
@@ -77,6 +73,8 @@ function App() {
       <footer className="border-t border-white/10 px-6 py-6 text-xs text-blue-300">
         &copy; {new Date().getFullYear()} CivicDog. All rights reserved.
       </footer>
+
+      {settingsOpen && <SettingsOverlay onClose={closeSettings} />}
     </div>
   )
 }
