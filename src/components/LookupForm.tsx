@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import {
   CdServerError,
   getDistrict,
+  getDistrictByCoords,
   getRepresentatives,
   getSenators,
   getStates,
@@ -71,6 +72,63 @@ function MemberCard({ member, chamber }: { member: Representative | Senator; cha
   )
 }
 
+// Feature-detected at render (not import) time -- it's absent in
+// non-secure contexts and unset by default in jsdom. When false the
+// "use my location" icon isn't rendered at all; the address field is
+// the only path and it's already there.
+function geolocationAvailable(): boolean {
+  return typeof navigator.geolocation?.getCurrentPosition === 'function'
+}
+
+// navigator.geolocation.getCurrentPosition, promisified, with a message
+// tuned per failure mode. Rejects with a CdServerError so the shared
+// error rendering (errorMessage) surfaces the text verbatim, same as a
+// getDistrict failure.
+function getCurrentPosition(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (err) => {
+        const message =
+          err.code === err.PERMISSION_DENIED
+            ? 'Location access is blocked. Allow it in your browser settings, or enter your address instead.'
+            : err.code === err.TIMEOUT
+              ? 'Getting your location took too long. Try again, or enter your address instead.'
+              : "Couldn't get your location. Try again, or enter your address instead."
+        reject(new CdServerError(message))
+      },
+      { timeout: 10_000, maximumAge: 60_000 },
+    )
+  })
+}
+
+function LocationIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+      className="h-5 w-5"
+    >
+      <circle cx="12" cy="12" r="3.5" />
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" />
+    </svg>
+  )
+}
+
+function SpinnerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-5 w-5 animate-spin">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeOpacity="0.25" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const inputClass =
   'w-full rounded-lg border border-white/20 bg-white px-3 py-2 text-navy-900 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/50'
 const radioLabelClass =
@@ -90,6 +148,9 @@ export function LookupForm() {
   const [district, setDistrict] = useState('')
   const [address, setAddress] = useState('')
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  // Distinct from status.kind === 'loading' so only the location icon
+  // shows a spinner -- a plain address Search shouldn't spin it too.
+  const [locating, setLocating] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -147,6 +208,24 @@ export function LookupForm() {
       setStatus({ kind: 'success', members })
     } catch (err) {
       setStatus({ kind: 'error', message: errorMessage(err) })
+    }
+  }
+
+  // "Use my location": browser geolocation -> district -> representatives,
+  // in one go. Only reachable in representatives-by-address mode, so the
+  // result always renders as a representatives search.
+  async function handleUseLocation() {
+    setLocating(true)
+    setStatus({ kind: 'loading' })
+    try {
+      const { coords } = await getCurrentPosition()
+      const { state, district } = await getDistrictByCoords(coords.latitude, coords.longitude)
+      const members = await getRepresentatives(state, district)
+      setStatus({ kind: 'success', members })
+    } catch (err) {
+      setStatus({ kind: 'error', message: errorMessage(err) })
+    } finally {
+      setLocating(false)
     }
   }
 
@@ -284,18 +363,32 @@ export function LookupForm() {
                 />
               </div>
             ) : (
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => {
-                  setAddress(e.target.value)
-                  resetStatus()
-                }}
-                placeholder="Street address, city, state, ZIP"
-                required
-                disabled={formDisabled}
-                className={inputClass}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => {
+                    setAddress(e.target.value)
+                    resetStatus()
+                  }}
+                  placeholder="Street address, city, state, ZIP"
+                  required
+                  disabled={formDisabled}
+                  className={`${inputClass} ${geolocationAvailable() ? 'pr-11' : ''}`}
+                />
+                {geolocationAvailable() && (
+                  <button
+                    type="button"
+                    onClick={handleUseLocation}
+                    disabled={formDisabled}
+                    aria-label="Use my location"
+                    title="Use my location"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-navy-500 transition-colors hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {locating ? <SpinnerIcon /> : <LocationIcon />}
+                  </button>
+                )}
+              </div>
             )}
           </>
         )}

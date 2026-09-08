@@ -149,6 +149,11 @@ const GET_DISTRICT_QUERY = `
     getDistrict(address: $address) { state district }
   }
 `
+const GET_DISTRICT_BY_COORDS_QUERY = `
+  query GetDistrictByCoords($latitude: Float!, $longitude: Float!) {
+    getDistrictByCoords(latitude: $latitude, longitude: $longitude) { state district }
+  }
+`
 const GET_REPRESENTATIVES_QUERY = `
   query GetRepresentatives($state: String!, $district: Int!) {
     getRepresentatives(state: $state, district: $district) {
@@ -204,6 +209,20 @@ export async function getDistrict(address: string): Promise<DistrictLookup> {
     GET_DISTRICT_QUERY,
     { address },
     'getDistrict',
+  )
+}
+
+// The "use my location" path: browser Geolocation coords -> state +
+// district, geocoded server-side (the Census geocoder sends no CORS
+// headers, so the browser can't call it directly).
+export async function getDistrictByCoords(
+  latitude: number,
+  longitude: number,
+): Promise<DistrictLookup> {
+  return graphqlRequest<{ getDistrictByCoords: DistrictLookup }, 'getDistrictByCoords'>(
+    GET_DISTRICT_BY_COORDS_QUERY,
+    { latitude, longitude },
+    'getDistrictByCoords',
   )
 }
 

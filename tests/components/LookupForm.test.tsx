@@ -1,8 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LookupForm } from '../../src/components/LookupForm'
-import { CdServerError, getDistrict, getRepresentatives, getSenators, getStates } from '../../src/lib/cdServer'
+import {
+  CdServerError,
+  getDistrict,
+  getDistrictByCoords,
+  getRepresentatives,
+  getSenators,
+  getStates,
+} from '../../src/lib/cdServer'
 
 vi.mock('../../src/lib/cdServer', async () => {
   const actual = await vi.importActual<typeof import('../../src/lib/cdServer')>('../../src/lib/cdServer')
@@ -10,6 +17,7 @@ vi.mock('../../src/lib/cdServer', async () => {
     ...actual,
     getStates: vi.fn(),
     getDistrict: vi.fn(),
+    getDistrictByCoords: vi.fn(),
     getRepresentatives: vi.fn(),
     getSenators: vi.fn(),
   }
@@ -266,6 +274,87 @@ describe('search flows', () => {
     await user.click(screen.getByRole('button', { name: /^search$/i }))
 
     expect(await screen.findByText('No results found.')).toBeInTheDocument()
+  })
+})
+
+describe('use my location', () => {
+  const originalGeolocation = Object.getOwnPropertyDescriptor(navigator, 'geolocation')
+
+  function setGeolocation(value: Geolocation | undefined) {
+    Object.defineProperty(navigator, 'geolocation', { value, configurable: true })
+  }
+  const stubGeolocation = (getCurrentPosition: Geolocation['getCurrentPosition']) =>
+    setGeolocation({ getCurrentPosition } as Geolocation)
+
+  afterEach(() => {
+    if (originalGeolocation) {
+      Object.defineProperty(navigator, 'geolocation', originalGeolocation)
+    } else {
+      setGeolocation(undefined)
+    }
+  })
+
+  async function openAddressMode() {
+    const user = userEvent.setup()
+    render(<LookupForm />)
+    await user.click(screen.getByRole('button', { name: /enter your address instead/i }))
+    return user
+  }
+
+  const POS = { coords: { latitude: 37.77, longitude: -122.42 } } as GeolocationPosition
+  const denied = {
+    code: 1,
+    PERMISSION_DENIED: 1,
+    POSITION_UNAVAILABLE: 2,
+    TIMEOUT: 3,
+    message: 'User denied Geolocation',
+  } as GeolocationPositionError
+
+  it('resolves location to district and auto-runs the representatives search', async () => {
+    stubGeolocation((success) => success(POS))
+    vi.mocked(getDistrictByCoords).mockResolvedValueOnce({ state: 'CA', district: 11 })
+    vi.mocked(getRepresentatives).mockResolvedValueOnce([REP])
+    const user = await openAddressMode()
+
+    await user.click(screen.getByRole('button', { name: /use my location/i }))
+
+    await waitFor(() => expect(getDistrictByCoords).toHaveBeenCalledWith(37.77, -122.42))
+    expect(getRepresentatives).toHaveBeenCalledWith('CA', 11)
+    expect(getDistrict).not.toHaveBeenCalled()
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+  })
+
+  it('shows a friendly, actionable error when the user blocks location access', async () => {
+    stubGeolocation((_success, error) => error!(denied))
+    const user = await openAddressMode()
+
+    await user.click(screen.getByRole('button', { name: /use my location/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /location access is blocked.*enter your address instead/i,
+    )
+    expect(getDistrictByCoords).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a "not in a district" error from the backend', async () => {
+    stubGeolocation((success) => success(POS))
+    vi.mocked(getDistrictByCoords).mockRejectedValueOnce(
+      new CdServerError("That location isn't inside a U.S. congressional district"),
+    )
+    const user = await openAddressMode()
+
+    await user.click(screen.getByRole('button', { name: /use my location/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /inside a U\.S\. congressional district/i,
+    )
+  })
+
+  it('does not render the icon at all when the browser has no geolocation', async () => {
+    setGeolocation(undefined)
+    await openAddressMode()
+
+    expect(screen.queryByRole('button', { name: /use my location/i })).not.toBeInTheDocument()
   })
 })
 
