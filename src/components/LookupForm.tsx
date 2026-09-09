@@ -402,7 +402,7 @@ export function LookupForm() {
                     disabled={formDisabled}
                     aria-label="Use my location"
                     title="Use my location"
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-navy-500 transition-colors hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-navy-600 transition-colors hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {locating ? <SpinnerIcon /> : <LocationIcon />}
                   </button>
