@@ -59,7 +59,12 @@ schema changes. `getStates` and `getDistrict` are both real backend
 calls (the states list and the address→district geocoding both happen
 server-side) — don't reintroduce a hardcoded state list or a client-side
 mock, both existed briefly during planning and are gone now that the
-real fields work.
+real fields work. The address field also has a "use my location" icon
+button: browser Geolocation → `getDistrictByCoords(lat, lng)` →
+`getRepresentatives`, auto-running the search. The coord→district
+geocoding is server-side too (`getDistrictByCoords`, cd-platform#173) —
+the Census geocoder sends no CORS headers, so the browser can't call it
+directly.
 
 `cd-server`'s `CORSMiddleware` (`app.py`) allow-lists exactly
 `http://localhost:5183` and `https://app.civicdog.com` (see
