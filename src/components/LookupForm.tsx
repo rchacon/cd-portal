@@ -235,8 +235,11 @@ export function LookupForm() {
     setStatus({ kind: 'loading' })
     try {
       const { coords } = await getCurrentPosition()
-      const { state, district } = await getDistrictByCoords(coords.latitude, coords.longitude)
-      const members = await getRepresentatives(state, district)
+      // Destructure into `resolved` rather than `{ state, district }` --
+      // a bare `district` here would shadow the district input-field state,
+      // the same trap handleSubmit sidesteps.
+      const resolved = await getDistrictByCoords(coords.latitude, coords.longitude)
+      const members = await getRepresentatives(resolved.state, resolved.district)
       setStatus({ kind: 'success', members })
     } catch (err) {
       setStatus({ kind: 'error', message: errorMessage(err) })
