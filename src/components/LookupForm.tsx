@@ -113,7 +113,12 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
               : "Couldn't get your location. Try again, or enter your address instead."
         settle(() => reject(new CdServerError(message)))
       },
-      { timeout: 10_000, maximumAge: 60_000 },
+      // enableHighAccuracy: without it browsers use the low-power provider
+      // (Wi-Fi / cell / IP), whose error radius runs 1-5 km and can land in
+      // the wrong city on desktop -- getDistrictByCoords resolves any
+      // coordinate to *a* district, so an inaccurate fix silently returns
+      // the wrong district near boundaries with no signal to the user.
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
     )
   })
 }
