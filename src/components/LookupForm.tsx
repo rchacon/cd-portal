@@ -86,8 +86,24 @@ function geolocationAvailable(): boolean {
 // getDistrict failure.
 function getCurrentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
+    // The `timeout` option below only bounds *position acquisition*, not a
+    // permission prompt the user leaves open -- browsers never time that out,
+    // so getCurrentPosition can invoke neither callback indefinitely and the
+    // caller (which disables the whole form while it waits) hangs with no
+    // cancel affordance. This watchdog bounds the entire round trip.
+    const watchdog = setTimeout(() => {
+      reject(
+        new CdServerError(
+          'Getting your location took too long. Try again, or enter your address instead.',
+        ),
+      )
+    }, 15_000)
+    const settle = (fn: () => void) => {
+      clearTimeout(watchdog)
+      fn()
+    }
     navigator.geolocation.getCurrentPosition(
-      resolve,
+      (pos) => settle(() => resolve(pos)),
       (err) => {
         const message =
           err.code === err.PERMISSION_DENIED
@@ -95,7 +111,7 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
             : err.code === err.TIMEOUT
               ? 'Getting your location took too long. Try again, or enter your address instead.'
               : "Couldn't get your location. Try again, or enter your address instead."
-        reject(new CdServerError(message))
+        settle(() => reject(new CdServerError(message)))
       },
       { timeout: 10_000, maximumAge: 60_000 },
     )
